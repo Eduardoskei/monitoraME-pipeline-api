@@ -11,7 +11,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 - Enriquece municípios com dados oficiais do IBGE.
 - Enriquece fornecedores com dados cadastrais da OpenCNPJ.
 - Calcula KPI de participação mensal de ME em contratos do TCE-CE.
-- Mantém cache opcional em Postgres para municípios IBGE e fornecedores ME.
+- Mantém cache em Postgres para municípios IBGE e fornecedores ME.
 
 ## Tree Do Projeto
 
@@ -74,7 +74,7 @@ Para rodar o projeto localmente:
 - Python `3.14`.
 - `pip`.
 - Acesso à internet para instalar pacotes e consultar PNCP, TCE-CE, IBGE e OpenCNPJ.
-- Postgres opcional, usado apenas para cache local quando `DATABASE_URL` estiver configurada.
+- Postgres configurado via `DATABASE_URL`, usado para cache local.
 
 Dependências Python principais:
 
@@ -114,7 +114,7 @@ Variáveis esperadas:
 
 | Variável | Obrigatória | Uso |
 | --- | --- | --- |
-| `DATABASE_URL` | Não | Cache opcional em Postgres. Se vazia, a API segue sem cache local. |
+| `DATABASE_URL` | Sim | Conexão obrigatória com o Postgres usado pelo cache local. |
 | `DATABASE_SSLMODE` | Não | Modo SSL do Postgres. Padrão: `require`. |
 | `TCE_CE_BASE_URL` | Sim | Base da API de dados abertos do TCE-CE. |
 | `IBGE_LOCALIDADES_BASE_URL` | Sim | Base da API de localidades do IBGE. |
@@ -129,6 +129,8 @@ Variáveis esperadas:
 Valores padrão atuais em `.env.example`:
 
 ```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/monitorame
+DATABASE_SSLMODE=require
 UF_PADRAO=CE
 CODIGO_IBGE_PADRAO=2304400
 CODIGO_MUNICIPIO_TCE_PADRAO=010
@@ -183,14 +185,14 @@ Responsabilidades por módulo:
 
 ## Cache Postgres
 
-O Postgres é opcional para a API subir. Se `DATABASE_URL` estiver ausente/vazia ou se o driver não estiver instalado, o lifespan registra a indisponibilidade e segue sem cache local.
+O Postgres é obrigatório para a API subir. `DATABASE_URL` precisa estar preenchida no ambiente ou no `.env`; se estiver ausente/vazia, a configuração falha na inicialização. Durante o lifespan, a API inicializa o schema do cache e encerra o pool ao desligar.
 
-Quando configurado, o cache mantém:
+O cache mantém:
 
 - `ibge_municipios`: código, nome e UF de municípios.
 - `fornecedores_me`: CNPJs de fornecedores confirmados como ME.
 
-As integrações com IBGE e OpenCNPJ continuam funcionando sem cache, mas podem fazer mais chamadas externas.
+As integrações com IBGE e OpenCNPJ usam esse cache para reduzir chamadas externas e reaproveitar dados já consultados.
 
 ## Rodando Testes
 

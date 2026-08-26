@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
@@ -54,14 +55,15 @@ class MainTest(unittest.TestCase):
 
         asyncio.run(executar_lifespan())
 
-    def test_lifespan_continua_sem_database_url(self) -> None:
+    def test_lifespan_propaga_falha_de_database_url(self) -> None:
         async def executar_lifespan() -> None:
             with (
                 patch("app.main.database.init_db", side_effect=RuntimeError("DATABASE_URL nao esta definida")),
                 patch("app.main.database.close_pool") as close_pool,
             ):
-                async with main.lifespan(main.app):
-                    close_pool.assert_not_called()
+                with self.assertRaisesRegex(RuntimeError, "DATABASE_URL"):
+                    async with main.lifespan(main.app):
+                        pass
 
                 close_pool.assert_called_once_with()
 
