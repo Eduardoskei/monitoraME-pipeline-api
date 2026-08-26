@@ -1,7 +1,8 @@
 import os
 from typing import Any
-from dotenv import load_dotenv
+from app.core.config import DATABASE_URL
 from app.utils import primeiro_valor as _primeiro_valor
+
 try:
     from psycopg2 import pool as pg_pool
 except ImportError as error:
@@ -11,9 +12,6 @@ else:
     _PSYCOPG2_IMPORT_ERROR = None
 
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
 DATABASE_SSLMODE = os.getenv("DATABASE_SSLMODE", "require")
 
 db_pool: Any | None = None
@@ -22,7 +20,7 @@ _schema_initialized = False
 
 def _database_url() -> str:
     database_url = os.getenv("DATABASE_URL") or DATABASE_URL
-    if database_url is None or not database_url.strip():
+    if not database_url.strip():
         raise RuntimeError("DATABASE_URL nao esta definida")
 
     return database_url.strip()

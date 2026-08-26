@@ -4,7 +4,7 @@ import unicodedata
 
 
 VALORES_VAZIOS = (None, "")
-MARCADORES_BANCO_INDISPONIVEL = ("DATABASE_URL", "psycopg2-binary")
+MARCADORES_BANCO_INDISPONIVEL = ("psycopg2-binary",)
 
 
 def somente_digitos(valor: Any) -> str:
@@ -66,7 +66,7 @@ def filtrar_params_vazios(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def banco_indisponivel(error: RuntimeError) -> bool:
-    """Identifica erros esperados quando o cache Postgres opcional nao esta pronto."""
+    """Identifica erros esperados quando o cache Postgres nao esta pronto."""
     mensagem = str(error)
     return any(marcador in mensagem for marcador in MARCADORES_BANCO_INDISPONIVEL)
 

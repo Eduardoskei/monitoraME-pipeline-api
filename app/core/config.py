@@ -24,7 +24,7 @@ def _int_env(key: str) -> int:
         raise ConfigError(f"Variavel de ambiente {key} deve ser um inteiro.") from error
 
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = _env("DATABASE_URL")
 TCE_CE_BASE_URL = _env("TCE_CE_BASE_URL", strip_slash=True)
 IBGE_LOCALIDADES_BASE_URL = _env("IBGE_LOCALIDADES_BASE_URL", strip_slash=True)
 PNCP_CONSULTA_BASE_URL = _env("PNCP_CONSULTA_BASE_URL", strip_slash=True)
