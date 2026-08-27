@@ -50,6 +50,33 @@ class TceIngestionTest(unittest.TestCase):
         self.assertEqual(buscar_dados_tce.call_args_list[0].args[1]["$start_index"], 0)
         self.assertEqual(buscar_dados_tce.call_args_list[1].args[1]["$start_index"], 2)
 
+    @patch("app.pipeline.ingestion.pagination.time.sleep")
+    @patch("app.pipeline.ingestion.tce.buscar_dados_tce")
+    def test_listar_registros_municipio_alto_volume_pagina_ate_esgotar(
+        self,
+        buscar_dados_tce,
+        sleep,
+    ) -> None:
+        def pagina(_endpoint: str, params: dict[str, object]) -> dict[str, object]:
+            start_index = int(params["$start_index"])
+            total = 2250
+            fim = min(start_index + tce.TAMANHO_PAGINA, total)
+            return {"elements": [{"numero_contrato": str(indice)} for indice in range(start_index, fim)]}
+
+        buscar_dados_tce.side_effect = pagina
+
+        registros = tce.listar_registros("contratos", {"codigo_municipio": "138"})
+
+        self.assertEqual(len(registros), 2250)
+        self.assertEqual(registros[0]["numero_contrato"], "0")
+        self.assertEqual(registros[-1]["numero_contrato"], "2249")
+
+        params_chamadas = [chamada.args[1] for chamada in buscar_dados_tce.call_args_list]
+        self.assertEqual([params["$start_index"] for params in params_chamadas], [0, 1000, 2000])
+        self.assertTrue(all(params["$count"] == 1000 for params in params_chamadas))
+        self.assertTrue(all(params["codigo_municipio"] == "138" for params in params_chamadas))
+        self.assertEqual(sleep.call_count, 2)
+
     @patch("app.pipeline.ingestion.tce.listar_registros")
     def test_buscar_contratacoes_filtra_modalidade_quando_informada(self, listar_registros) -> None:
         listar_registros.return_value = [

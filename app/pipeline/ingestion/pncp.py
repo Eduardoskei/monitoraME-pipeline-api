@@ -4,6 +4,7 @@ import time
 import requests
 
 from app.core.config import PNCP_CONSULTA_BASE_URL, PNCP_GESTAO_BASE_URL
+from app.pipeline.ingestion.pagination import listar_por_numero_pagina
 from app.utils import (
     filtrar_params_vazios,
     normalizar_data,
@@ -137,40 +138,24 @@ def _listar_paginas(
     tamanho_pagina: int = TAMANHO_PAGINA_CONTRATACOES,
     max_paginas: int | None = None,
 ) -> list[dict[str, Any]]:
-    registros: list[dict[str, Any]] = []
-    pagina = 1
-
-    while True:
-        dados = _get_json(
+    def buscar_pagina(pagina: int, limite: int) -> Any:
+        return _get_json(
             path,
             {
                 **params,
                 "pagina": pagina,
-                "tamanhoPagina": tamanho_pagina,
+                "tamanhoPagina": limite,
             },
             base_url=base_url,
         )
-        itens = _extrair_lista(dados)
 
-        if not itens:
-            break
-
-        registros.extend(itens)
-
-        total_paginas = _total_paginas(dados)
-        if total_paginas is not None and pagina >= total_paginas:
-            break
-
-        if len(itens) < tamanho_pagina:
-            break
-
-        if max_paginas is not None and pagina >= max_paginas:
-            break
-
-        pagina += 1
-        time.sleep(0.2)
-
-    return registros
+    return listar_por_numero_pagina(
+        buscar_pagina,
+        _extrair_lista,
+        total_paginas=_total_paginas,
+        tamanho_pagina=tamanho_pagina,
+        max_paginas=max_paginas,
+    )
 
 
 def buscar_modalidades() -> list[dict[str, Any]]:

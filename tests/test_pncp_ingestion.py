@@ -46,6 +46,22 @@ class PncpIngestionTest(unittest.TestCase):
         self.assertEqual(pncp.normalizar_data_pncp("2025-01-07"), "20250107")
         self.assertEqual(pncp.normalizar_data_pncp("20250107"), "20250107")
 
+    @patch("app.pipeline.ingestion.pagination.time.sleep")
+    @patch("app.pipeline.ingestion.pncp._get_json")
+    def test_listar_paginas_incrementa_pagina_ate_total_informado(self, get_json, sleep) -> None:
+        get_json.side_effect = [
+            {"data": [{"id": 1}, {"id": 2}], "totalPaginas": 2},
+            {"data": [{"id": 3}, {"id": 4}], "totalPaginas": 2},
+        ]
+
+        registros = pncp._listar_paginas("/v1/teste", {}, tamanho_pagina=2)
+
+        self.assertEqual([registro["id"] for registro in registros], [1, 2, 3, 4])
+        self.assertEqual(get_json.call_args_list[0].args[1]["pagina"], 1)
+        self.assertEqual(get_json.call_args_list[1].args[1]["pagina"], 2)
+        self.assertEqual(get_json.call_args_list[0].args[1]["tamanhoPagina"], 2)
+        sleep.assert_called_once()
+
     def test_extrair_identificador_compra_usa_orgao_entidade(self) -> None:
         identificador = pncp.extrair_identificador_compra(
             {
