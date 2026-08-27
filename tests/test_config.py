@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 REQUIRED_ENV = {
     "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/monitorame_test",
+    "LOG_DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test",
     "TCE_CE_BASE_URL": "https://api-dados-abertos.tce.ce.gov.br/sim/",
     "IBGE_LOCALIDADES_BASE_URL": "https://servicodados.ibge.gov.br/api/v1/localidades",
     "PNCP_CONSULTA_BASE_URL": "https://pncp.gov.br/api/consulta",
@@ -54,10 +55,21 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "DATABASE_URL"):
             self._reload_config_with_env(env)
 
+    def test_log_database_url_obrigatoria(self) -> None:
+        env = REQUIRED_ENV.copy()
+        env.pop("LOG_DATABASE_URL")
+
+        with self.assertRaisesRegex(RuntimeError, "LOG_DATABASE_URL"):
+            self._reload_config_with_env(env)
+
     def test_variaveis_configuradas_sao_carregadas(self) -> None:
         config = self._reload_config_with_env(REQUIRED_ENV)
 
         self.assertEqual(config.DATABASE_URL, "postgresql://postgres:postgres@localhost:5432/monitorame_test")
+        self.assertEqual(
+            config.LOG_DATABASE_URL,
+            "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test",
+        )
         self.assertEqual(config.TCE_CE_BASE_URL, "https://api-dados-abertos.tce.ce.gov.br/sim")
         self.assertEqual(config.MODALIDADE_ID_PADRAO, 6)
 

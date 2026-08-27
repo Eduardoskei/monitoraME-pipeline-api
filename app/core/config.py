@@ -25,6 +25,7 @@ def _int_env(key: str) -> int:
 
 
 DATABASE_URL = _env("DATABASE_URL")
+LOG_DATABASE_URL = _env("LOG_DATABASE_URL")
 TCE_CE_BASE_URL = _env("TCE_CE_BASE_URL", strip_slash=True)
 IBGE_LOCALIDADES_BASE_URL = _env("IBGE_LOCALIDADES_BASE_URL", strip_slash=True)
 PNCP_CONSULTA_BASE_URL = _env("PNCP_CONSULTA_BASE_URL", strip_slash=True)

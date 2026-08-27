@@ -1,8 +1,10 @@
 from typing import Any
+import logging
 import time
 import json
 import requests
 
+from app.core.logging import executar_com_log_ingestao, registrar_falha_ingestao
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
 from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
 from app.utils import normalizar_data
@@ -10,6 +12,8 @@ from app.utils import normalizar_data
 BASE_URL = TCE_CE_BASE_URL
 TAMANHO_PAGINA = LIMITE_REGISTROS_POR_REQUISICAO
 CODIGO_MUNICIPIO_PADRAO = CODIGO_MUNICIPIO_TCE_PADRAO
+
+logger = logging.getLogger(__name__)
 
 ENDPOINT_CONTRATACOES = "processos_administrativos_contratacoes"
 ENDPOINT_CONTRATOS = "contratos"
@@ -44,7 +48,8 @@ def buscar_dados_tce(endpoint: str, params: dict[str, Any], max_retries: int = 3
 
         except (requests.RequestException, ValueError) as error:
             if tentativa == max_retries:
-                print(f"Falha ao buscar dados do TCE-CE: {error}")
+                registrar_falha_ingestao(error)
+                logger.warning("Falha ao buscar dados do TCE-CE: %s", error)
                 return {"elements": []}
 
             time.sleep(espera)
@@ -69,7 +74,13 @@ def listar_registros(endpoint: str, params: dict[str, Any]) -> list[dict[str, An
 
 
 def buscar_municipios() -> list[dict[str, Any]]:
-    return listar_registros("municipios", {})
+    return executar_com_log_ingestao(
+        fonte="TCE-CE",
+        etapa="buscar_municipios",
+        parametros={},
+        totais={"endpoint": "municipios"},
+        executar=lambda: listar_registros("municipios", {}),
+    )
 
 
 def _params_periodo(data_inicial: str, data_final: str, codigo_municipio: str) -> dict[str, str]:
@@ -86,15 +97,31 @@ def buscar_contratacoes(
     codigo_municipio: str = CODIGO_MUNICIPIO_PADRAO,
     modalidade: str = "",
 ) -> list[dict[str, Any]]:
-    registros = listar_registros(
-        ENDPOINT_CONTRATACOES,
-        _params_periodo(data_inicial, data_final, codigo_municipio),
+    parametros = {
+        "data_inicial": data_inicial,
+        "data_final": data_final,
+        "codigo_municipio": codigo_municipio,
+        "modalidade": modalidade,
+    }
+
+    def executar() -> list[dict[str, Any]]:
+        registros = listar_registros(
+            ENDPOINT_CONTRATACOES,
+            _params_periodo(data_inicial, data_final, codigo_municipio),
+        )
+
+        if not modalidade:
+            return registros
+
+        return [registro for registro in registros if registro.get("modalidade_licitacao") == modalidade]
+
+    return executar_com_log_ingestao(
+        fonte="TCE-CE",
+        etapa="buscar_contratacoes",
+        parametros=parametros,
+        totais={"endpoint": ENDPOINT_CONTRATACOES},
+        executar=executar,
     )
-
-    if not modalidade:
-        return registros
-
-    return [registro for registro in registros if registro.get("modalidade_licitacao") == modalidade]
 
 
 def buscar_contratos(
@@ -102,9 +129,20 @@ def buscar_contratos(
     data_final: str,
     codigo_municipio: str = CODIGO_MUNICIPIO_PADRAO,
 ) -> list[dict[str, Any]]:
-    return listar_registros(
-        ENDPOINT_CONTRATOS,
-        _params_periodo(data_inicial, data_final, codigo_municipio),
+    parametros = {
+        "data_inicial": data_inicial,
+        "data_final": data_final,
+        "codigo_municipio": codigo_municipio,
+    }
+    return executar_com_log_ingestao(
+        fonte="TCE-CE",
+        etapa="buscar_contratos",
+        parametros=parametros,
+        totais={"endpoint": ENDPOINT_CONTRATOS},
+        executar=lambda: listar_registros(
+            ENDPOINT_CONTRATOS,
+            _params_periodo(data_inicial, data_final, codigo_municipio),
+        ),
     )
 
 
@@ -113,9 +151,20 @@ def buscar_contratados(
     data_final: str,
     codigo_municipio: str = CODIGO_MUNICIPIO_PADRAO,
 ) -> list[dict[str, Any]]:
-    return listar_registros(
-        ENDPOINT_CONTRATADOS,
-        _params_periodo(data_inicial, data_final, codigo_municipio),
+    parametros = {
+        "data_inicial": data_inicial,
+        "data_final": data_final,
+        "codigo_municipio": codigo_municipio,
+    }
+    return executar_com_log_ingestao(
+        fonte="TCE-CE",
+        etapa="buscar_contratados",
+        parametros=parametros,
+        totais={"endpoint": ENDPOINT_CONTRATADOS},
+        executar=lambda: listar_registros(
+            ENDPOINT_CONTRATADOS,
+            _params_periodo(data_inicial, data_final, codigo_municipio),
+        ),
     )
 
 
@@ -125,18 +174,28 @@ def buscar_itens_contratacao(
     codigo_municipio: str = CODIGO_MUNICIPIO_PADRAO,
     numero_licitacao: str = "",
 ) -> list[dict[str, Any]]:
-    registros = listar_registros(
-        ENDPOINT_ITENS,
-        _params_periodo(data_inicial, data_final, codigo_municipio),
+    parametros = {
+        "data_inicial": data_inicial,
+        "data_final": data_final,
+        "codigo_municipio": codigo_municipio,
+        "numero_licitacao": numero_licitacao,
+    }
+
+    def executar() -> list[dict[str, Any]]:
+        registros = listar_registros(
+            ENDPOINT_ITENS,
+            _params_periodo(data_inicial, data_final, codigo_municipio),
+        )
+
+        if not numero_licitacao:
+            return registros
+
+        return [registro for registro in registros if registro.get("numero_licitacao") == numero_licitacao]
+
+    return executar_com_log_ingestao(
+        fonte="TCE-CE",
+        etapa="buscar_itens_contratacao",
+        parametros=parametros,
+        totais={"endpoint": ENDPOINT_ITENS},
+        executar=executar,
     )
-
-    if not numero_licitacao:
-        return registros
-
-    return [registro for registro in registros if registro.get("numero_licitacao") == numero_licitacao]
-
-
-if __name__ == "__main__":
-    contratos = buscar_contratos("20241001", "20250101")
-    print(f"Total de contratos em Amontada: {len(contratos)}")
-    print(json.dumps(contratos, indent=2, ensure_ascii=False))

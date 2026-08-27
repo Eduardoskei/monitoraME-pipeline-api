@@ -10,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_test")
+os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
@@ -46,12 +47,17 @@ class MainTest(unittest.TestCase):
             with (
                 patch("app.main.database.init_db") as init_db,
                 patch("app.main.database.close_pool") as close_pool,
+                patch("app.main.log_database.init_log_db") as init_log_db,
+                patch("app.main.log_database.close_log_pool") as close_log_pool,
             ):
                 async with main.lifespan(main.app):
                     init_db.assert_called_once_with()
+                    init_log_db.assert_called_once_with()
                     close_pool.assert_not_called()
+                    close_log_pool.assert_not_called()
 
                 close_pool.assert_called_once_with()
+                close_log_pool.assert_called_once_with()
 
         asyncio.run(executar_lifespan())
 
@@ -60,12 +66,14 @@ class MainTest(unittest.TestCase):
             with (
                 patch("app.main.database.init_db", side_effect=RuntimeError("DATABASE_URL nao esta definida")),
                 patch("app.main.database.close_pool") as close_pool,
+                patch("app.main.log_database.close_log_pool") as close_log_pool,
             ):
                 with self.assertRaisesRegex(RuntimeError, "DATABASE_URL"):
                     async with main.lifespan(main.app):
                         pass
 
                 close_pool.assert_called_once_with()
+                close_log_pool.assert_called_once_with()
 
         asyncio.run(executar_lifespan())
 
