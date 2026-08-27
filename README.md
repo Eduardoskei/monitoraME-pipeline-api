@@ -12,6 +12,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 - Enriquece fornecedores com dados cadastrais da OpenCNPJ.
 - Calcula KPI de participação mensal de ME em contratos do TCE-CE.
 - Mantém cache em Postgres para municípios IBGE e fornecedores ME.
+- Registra execuções de ingestão TCE-CE em uma tabela de logs no banco configurado por `LOG_DATABASE_URL`.
 
 ## Tree Do Projeto
 
@@ -37,7 +38,9 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 │   ├── core
 │   │   ├── __init__.py
 │   │   ├── config.py
-│   │   └── database.py
+│   │   ├── database.py
+│   │   ├── logging.py
+│   │   └── log_database.py
 │   └── pipeline
 │       ├── __init__.py
 │       ├── analisys.py
@@ -57,6 +60,8 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
     ├── test_fornecedores_ingestion.py
     ├── test_ibge_ingestion.py
     ├── test_kpis.py
+    ├── test_logging.py
+    ├── test_log_database.py
     ├── test_main.py
     ├── test_merge.py
     ├── test_pncp_ingestion.py
@@ -75,6 +80,7 @@ Para rodar o projeto localmente:
 - `pip`.
 - Acesso à internet para instalar pacotes e consultar PNCP, TCE-CE, IBGE e OpenCNPJ.
 - Postgres configurado via `DATABASE_URL`, usado para cache local.
+- Postgres configurado via `LOG_DATABASE_URL`, usado para logs de execução da ingestão.
 
 Dependências Python principais:
 
@@ -115,7 +121,9 @@ Variáveis esperadas:
 | Variável | Obrigatória | Uso |
 | --- | --- | --- |
 | `DATABASE_URL` | Sim | Conexão obrigatória com o Postgres usado pelo cache local. |
+| `LOG_DATABASE_URL` | Sim | Conexão obrigatória com o Postgres usado pela tabela `logs_ingestao`. |
 | `DATABASE_SSLMODE` | Não | Modo SSL do Postgres. Padrão: `require`. |
+| `LOG_DATABASE_SSLMODE` | Não | Modo SSL do Postgres de logs. Se ausente, usa `DATABASE_SSLMODE` ou `require`. |
 | `TCE_CE_BASE_URL` | Sim | Base da API de dados abertos do TCE-CE. |
 | `IBGE_LOCALIDADES_BASE_URL` | Sim | Base da API de localidades do IBGE. |
 | `PNCP_CONSULTA_BASE_URL` | Sim | Base da API de consulta do PNCP. |
@@ -130,6 +138,7 @@ Valores padrão atuais em `.env.example`:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/monitorame
+LOG_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/monitorame_logs
 DATABASE_SSLMODE=require
 UF_PADRAO=CE
 CODIGO_IBGE_PADRAO=2304400
@@ -193,6 +202,12 @@ O cache mantém:
 - `fornecedores_me`: CNPJs de fornecedores confirmados como ME.
 
 As integrações com IBGE e OpenCNPJ usam esse cache para reduzir chamadas externas e reaproveitar dados já consultados.
+
+## Logs De Ingestão TCE-CE
+
+A ingestão TCE-CE grava uma linha por execução das funções públicas de coleta (`buscar_contratos`, `buscar_contratados`, `buscar_contratacoes`, `buscar_itens_contratacao` e `buscar_municipios`) na tabela `logs_ingestao`, criada automaticamente no banco apontado por `LOG_DATABASE_URL`.
+
+Cada registro inclui fonte, etapa, status, data/hora de início e término, quantidade de registros processados, quantidade de falhas ocorridas, parâmetros da execução, totais em JSONB e mensagem de erro quando houver.
 
 ## Rodando Testes
 

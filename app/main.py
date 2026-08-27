@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.core import database
+from app.core import database, log_database
 from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
     pncp_contratacoes,
@@ -26,9 +26,11 @@ __all__ = [
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     try:
         database.init_db()
+        log_database.init_log_db()
         yield
     finally:
         database.close_pool()
+        log_database.close_log_pool()
 
 
 app = FastAPI(

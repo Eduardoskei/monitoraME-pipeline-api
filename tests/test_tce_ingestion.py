@@ -4,11 +4,13 @@ import os
 from pathlib import Path
 import sys
 import unittest
+import requests
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_test")
+os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
@@ -77,8 +79,13 @@ class TceIngestionTest(unittest.TestCase):
         self.assertTrue(all(params["codigo_municipio"] == "138" for params in params_chamadas))
         self.assertEqual(sleep.call_count, 2)
 
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
     @patch("app.pipeline.ingestion.tce.listar_registros")
-    def test_buscar_contratacoes_filtra_modalidade_quando_informada(self, listar_registros) -> None:
+    def test_buscar_contratacoes_filtra_modalidade_quando_informada(
+        self,
+        listar_registros,
+        registrar_log_ingestao,
+    ) -> None:
         listar_registros.return_value = [
             {"numero_licitacao": "A", "modalidade_licitacao": "6"},
             {"numero_licitacao": "B", "modalidade_licitacao": "9"},
@@ -87,6 +94,49 @@ class TceIngestionTest(unittest.TestCase):
         registros = tce.buscar_contratacoes("20250101", "20250107", modalidade="9")
 
         self.assertEqual(registros, [{"numero_licitacao": "B", "modalidade_licitacao": "9"}])
+        registrar_log_ingestao.assert_called_once()
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.listar_registros")
+    def test_buscar_contratos_grava_log_de_sucesso(
+        self,
+        listar_registros,
+        registrar_log_ingestao,
+    ) -> None:
+        listar_registros.return_value = [{"numero_contrato": "2025000123"}]
+
+        registros = tce.buscar_contratos("20250101", "20250131", codigo_municipio="010")
+
+        self.assertEqual(registros, [{"numero_contrato": "2025000123"}])
+        chamada = registrar_log_ingestao.call_args.kwargs
+        self.assertEqual(chamada["fonte"], "TCE-CE")
+        self.assertEqual(chamada["etapa"], "buscar_contratos")
+        self.assertEqual(chamada["registros_processados"], 1)
+        self.assertEqual(chamada["falhas_ocorridas"], 0)
+        self.assertEqual(chamada["parametros"]["codigo_municipio"], "010")
+        self.assertLessEqual(chamada["data_inicio"], chamada["data_termino"])
+
+    @patch("app.pipeline.ingestion.tce.logger.warning")
+    @patch("app.pipeline.ingestion.tce.time.sleep")
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.requests.get")
+    def test_buscar_contratos_grava_log_de_falha_quando_tce_falha(
+        self,
+        get,
+        registrar_log_ingestao,
+        _sleep,
+        _warning,
+    ) -> None:
+        get.side_effect = requests.ReadTimeout("TCE-CE demorou")
+
+        registros = tce.buscar_contratos("20250101", "20250131", codigo_municipio="010")
+
+        self.assertEqual(registros, [])
+        chamada = registrar_log_ingestao.call_args.kwargs
+        self.assertEqual(chamada["etapa"], "buscar_contratos")
+        self.assertEqual(chamada["registros_processados"], 0)
+        self.assertEqual(chamada["falhas_ocorridas"], 1)
+        self.assertIn("TCE-CE demorou", chamada["erro"])
 
 
 if __name__ == "__main__":
