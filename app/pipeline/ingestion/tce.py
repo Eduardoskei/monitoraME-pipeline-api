@@ -4,10 +4,11 @@ import json
 import requests
 
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
+from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
 from app.utils import normalizar_data
 
 BASE_URL = TCE_CE_BASE_URL
-TAMANHO_PAGINA = 1000
+TAMANHO_PAGINA = LIMITE_REGISTROS_POR_REQUISICAO
 CODIGO_MUNICIPIO_PADRAO = CODIGO_MUNICIPIO_TCE_PADRAO
 
 ENDPOINT_CONTRATACOES = "processos_administrativos_contratacoes"
@@ -53,31 +54,18 @@ def buscar_dados_tce(endpoint: str, params: dict[str, Any], max_retries: int = 3
 
 
 def listar_registros(endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
-    registros: list[dict[str, Any]] = []
-    start_index = 0
-
-    while True:
+    def buscar_pagina(start_index: int, tamanho_pagina: int) -> list[Any]:
         pagina = buscar_dados_tce(
             endpoint,
             {
                 **params,
-                "$count": TAMANHO_PAGINA,
+                "$count": tamanho_pagina,
                 "$start_index": start_index,
             },
         ).get("elements", [])
+        return pagina if isinstance(pagina, list) else []
 
-        if not pagina:
-            break
-
-        registros.extend(item for item in pagina if isinstance(item, dict))
-
-        if len(pagina) < TAMANHO_PAGINA:
-            break
-
-        start_index += TAMANHO_PAGINA
-        time.sleep(0.2)
-
-    return registros
+    return listar_por_start_index(buscar_pagina, tamanho_pagina=TAMANHO_PAGINA)
 
 
 def buscar_municipios() -> list[dict[str, Any]]:
