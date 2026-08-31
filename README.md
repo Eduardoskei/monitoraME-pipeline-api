@@ -44,11 +44,17 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 │   └── pipeline
 │       ├── __init__.py
 │       ├── analisys.py
-│       ├── cleaning.py
+│       ├── cleaners
+│       │   ├── __init__.py
+│       │   ├── ibge.py
+│       │   ├── opencnpj.py
+│       │   ├── pncp.py
+│       │   └── tce.py
 │       ├── kpis.py
 │       ├── merge.py
 │       └── ingestion
 │           ├── __init__.py
+│           ├── pagination.py
 │           ├── fornecedores.py
 │           ├── ibge.py
 │           ├── pncp.py
@@ -168,7 +174,7 @@ Fontes externas
         ↓
 app/pipeline/ingestion
         ↓
-app/pipeline/cleaning
+app/pipeline/cleaners
         ↓
 app/pipeline/merge
         ↓
@@ -186,11 +192,11 @@ Responsabilidades por módulo:
 - `app/core/config.py`: carrega variáveis de ambiente obrigatórias via `python-dotenv`.
 - `app/core/database.py`: gerencia pool Postgres e tabelas de cache `ibge_municipios` e `fornecedores_me`.
 - `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
-- `app/pipeline/cleaning.py`: normaliza estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
+- `app/utils.py`: concentra funções utilitárias compartilhadas, incluindo o motor genérico de normalização de estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
+- `app/pipeline/cleaners/pncp.py`, `tce.py`, `ibge.py` e `opencnpj.py`: aplicam as regras de limpeza específicas de cada API.
 - `app/pipeline/merge.py`: cruza tabelas limpas entre fontes e aplica enriquecimentos.
 - `app/pipeline/kpis.py`: calcula agregações e KPIs sobre bases já limpas/enriquecidas.
 - `app/pipeline/analisys.py`: orquestra os fluxos completos usados pela API e serializa DataFrames para JSON.
-- `app/utils.py`: funções utilitárias compartilhadas.
 
 ## Cache Postgres
 

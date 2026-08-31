@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.pipeline import cleaning
+from app.pipeline.cleaners.ibge import validar_municipio_uf
+from app.utils import normalizar_cnpj
 
 def juntar_itens_pncp(tabelas: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
-    Achata o dict retornado por `cleaning.limpar_pncp_contratacoes` em uma
+    Achata o dict retornado por `cleaners.pncp.limpar_contratacoes` em uma
     unica tabela "contratacoes x itens" (left join por 'numero_controle_pncp'),
     para quando o consumo final precisa de 1 linha por item em vez de tabelas
     separadas. Contratacoes sem item (coleta sem `incluir_detalhes=True`)
@@ -62,7 +63,7 @@ def extrair_cnpjs_distintos(*colunas_cnpj: pd.Series | None) -> list[str]:
         if serie is None:
             continue
         for valor in serie.dropna():
-            cnpj = cleaning.normalizar_cnpj(valor)
+            cnpj = normalizar_cnpj(valor)
             if cnpj:
                 cnpjs.add(cnpj)
     return sorted(cnpjs)
@@ -75,7 +76,7 @@ def enriquecer_com_fornecedor(
     coluna_cnpj: str,
 ) -> pd.DataFrame:
     """
-    Left join dos dados ja limpos por `cleaning.limpar_fornecedores` em
+    Left join dos dados ja limpos por `cleaners.opencnpj.limpar_fornecedores` em
     qualquer tabela que tenha uma coluna de CNPJ do fornecedor/contratado.
     Traz porte/elegibilidade ME e razao social com o prefixo
     'fornecedor_', para nao colidir com colunas da tabela de origem.
@@ -87,7 +88,7 @@ def enriquecer_com_fornecedor(
     `coluna_cnpj` e normalizada internamente (so digitos) antes do join: o
     campo do PNCP que traz o CNPJ do fornecedor vencedor se chama
     'niFornecedor' (nao contem a palavra "cnpj"), entao ele nunca passa pela
-    normalizacao automatica de `cleaning.padronizar_documentos` — sem
+    normalizacao automatica de `app.utils.padronizar_documentos` — sem
     normalizar aqui tambem, o join falharia silenciosamente sempre que a
     formatacao dos dois lados divergisse.
     """
@@ -103,14 +104,14 @@ def enriquecer_com_fornecedor(
     referencia = referencia.rename(columns={"fornecedor_cnpj": chave_temp})
     referencia = referencia.drop_duplicates(subset=[chave_temp])
 
-    df[chave_temp] = df[coluna_cnpj].map(cleaning.normalizar_cnpj)
+    df[chave_temp] = df[coluna_cnpj].map(normalizar_cnpj)
     resultado = df.merge(referencia, on=chave_temp, how="left")
     return resultado.drop(columns=[chave_temp])
 
 
 # ---------------------------------------------------------------------------
 # 3. IBGE — enriquece/valida o municipio informado por outra fonte contra a
-#    base oficial (usa cleaning.validar_municipio_uf para o cruzamento)
+#    base oficial (usa cleaners.ibge.validar_municipio_uf para o cruzamento)
 # ---------------------------------------------------------------------------
 
 
@@ -121,7 +122,7 @@ def enriquecer_com_municipio(
     coluna_codigo_municipio: str,
 ) -> pd.DataFrame:
     """
-    Left join com a base de municipios do IBGE ja limpa (`cleaning.limpar_ibge_municipios`),
+    Left join com a base de municipios do IBGE ja limpa (`cleaners.ibge.limpar_municipios`),
     trazendo o nome/UF oficiais do municipio ('municipio_nome'/'municipio_uf')
     a partir do codigo IBGE informado pela outra fonte.
     """
@@ -151,13 +152,13 @@ def validar_e_enriquecer_municipio(
 ) -> pd.DataFrame:
     """
     Combina `enriquecer_com_municipio` (traz nome/UF oficiais para exibicao)
-    com `cleaning.validar_municipio_uf` (sinaliza divergencia entre a UF
+    com `cleaners.ibge.validar_municipio_uf` (sinaliza divergencia entre a UF
     informada pela fonte e a UF oficial do municipio), quando `coluna_uf` for
     passada.
     """
     df = enriquecer_com_municipio(df, municipios_ibge, coluna_codigo_municipio=coluna_codigo_municipio)
     if coluna_uf and municipios_ibge is not None and not municipios_ibge.empty:
-        df = cleaning.validar_municipio_uf(
+        df = validar_municipio_uf(
             df,
             municipios_ibge,
             coluna_codigo_municipio=coluna_codigo_municipio,
@@ -178,7 +179,7 @@ def montar_base_pncp(
     municipios_ibge: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """
-    Enriquece o dict retornado por `cleaning.limpar_pncp_contratacoes`:
+    Enriquece o dict retornado por `cleaners.pncp.limpar_contratacoes`:
       - 'contratacoes': valida/enriquece o municipio do orgao contra o IBGE
         (via 'unidade_orgao_codigo_ibge'/'unidade_orgao_uf_sigla'), quando
         `municipios_ibge` for informado;
@@ -225,7 +226,7 @@ def juntar_contratos_e_contratados(
     endpoint separado 'contratados'. Os dois se ligam por
     ('numero_contrato', 'codigo_municipio').
 
-    Faz o left join entre as duas tabelas ja limpas por `cleaning.limpar_tce`.
+    Faz o left join entre as duas tabelas ja limpas por `cleaners.tce.limpar`.
     Se `df_contratados` nao for informado (ou faltar a chave em algum dos
     lados), devolve `df_contratos` sem alteracao — nao inventa a chave.
     """
@@ -296,7 +297,7 @@ def unir_pncp_e_tce(
     ganha 'fonte' ('PNCP' ou 'TCE') indicando de onde veio.
 
     Ideal para comparar tabelas de granularidade equivalente, ex.:
-    `limpar_pncp_contratacoes(...)["contratacoes"]` com `limpar_tce(...)`,
+    `cleaners.pncp.limpar_contratacoes(...)["contratacoes"]` com `cleaners.tce.limpar(...)`,
     ou as versoes ja enriquecidas por `montar_base_pncp`/`montar_base_tce`
     (nesse caso, colunas de enriquecimento com o MESMO nome dos dois lados,
     como 'fornecedor_porte_padronizado', ficam alinhadas na mesma coluna —
