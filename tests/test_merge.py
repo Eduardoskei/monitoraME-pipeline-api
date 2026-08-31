@@ -22,7 +22,11 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import cleaning, merge
+from app.pipeline import merge
+from app.pipeline.cleaners import ibge as ibge_cleaning
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
+from app.pipeline.cleaners import pncp as pncp_cleaning
+from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, ibge, tce
 
 
@@ -73,7 +77,7 @@ def _tabelas_pncp_com_itens_e_contrato() -> dict[str, pd.DataFrame]:
             }
         ],
     }
-    return cleaning.limpar_pncp_contratacoes([registro])
+    return pncp_cleaning.limpar_contratacoes([registro])
 
 
 def _fornecedores_df_valido() -> pd.DataFrame:
@@ -85,7 +89,7 @@ def _fornecedores_df_valido() -> pd.DataFrame:
         }
         fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
-    return cleaning.limpar_fornecedores([fornecedor])
+    return opencnpj_cleaning.limpar_fornecedores([fornecedor])
 
 
 def _municipios_ibge_df() -> pd.DataFrame:
@@ -105,7 +109,7 @@ def _municipios_ibge_df() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.ibge.requests.get") as mock_get:
         mock_get.return_value = _fake_response([abaiara])
         registros = ibge.listar_municipios("CE")
-    return cleaning.limpar_ibge_municipios(registros)
+    return ibge_cleaning.limpar_municipios(registros)
 
 
 class JuntarItensPncpTest(unittest.TestCase):
@@ -236,7 +240,7 @@ def _df_tce_contratos() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
         registros = tce.buscar_contratos("20250101", "20250301", codigo_municipio="010")
-    return cleaning.limpar_tce(registros)
+    return tce_cleaning.limpar(registros)
 
 
 def _df_tce_contratados() -> pd.DataFrame:
@@ -254,7 +258,7 @@ def _df_tce_contratados() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
         registros = tce.buscar_contratados("20250101", "20250301", codigo_municipio="010")
-    return cleaning.limpar_tce(registros)
+    return tce_cleaning.limpar(registros)
 
 
 class MontarBaseTceTest(unittest.TestCase):

@@ -2,7 +2,7 @@
 app/pipeline/kpis.py
 
 Camada de agregacao (KPIs) sobre tabelas ja limpas/enriquecidas por
-cleaning.py e merge.py — nao faz join nem limpeza, so agrupa e soma.
+cleaners/ e merge.py — nao faz join nem limpeza, so agrupa e soma.
 
 Uso tipico:
     df = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.pipeline.cleaning import normalizar_chave_entidade, normalizar_cnpj
+from app.utils import normalizar_chave_entidade, normalizar_cnpj
 
 
 class DadosInsuficientesKPI(ValueError):
@@ -160,9 +160,9 @@ def calcular_participacao_me_local(
 def extrair_ano_mes(coluna_data: pd.Series) -> pd.Series:
     """
     Extrai o periodo 'YYYY-MM' de uma coluna de data ja normalizada para ISO
-    8601 por `cleaning.converter_datas` ('YYYY-MM-DD', 'YYYY-MM-DDTHH:MM:SS'
+    8601 por `app.utils.converter_datas` ('YYYY-MM-DD', 'YYYY-MM-DDTHH:MM:SS'
     ou '...Z'). Valores nulos/vazios (incluindo o marcador 'nao_informado' que
-    `cleaning.tratar_nulos` usa em colunas de texto) viram `None`.
+    `app.utils.tratar_nulos` usa em colunas de texto) viram `None`.
     """
     texto = coluna_data.astype("string")
     ano_mes = texto.str.slice(0, 7)
