@@ -340,6 +340,61 @@ class UnirPncpETceTest(unittest.TestCase):
         resultado = merge.unir_pncp_e_tce(pd.DataFrame(), None)
         self.assertTrue(resultado.empty)
 
+def _fake_response(payload, status_code: int = 200) -> MagicMock:
+    resposta = MagicMock()
+    resposta.status_code = status_code
+    resposta.json.return_value = payload
+    resposta.raise_for_status.return_value = None
+    return resposta
+
+class ClassificarOrigemGeograficaTest(unittest.TestCase):
+    def test_caso_1_mesmo_municipio(self) -> None:
+        resultado = merge.classificar_origem_geografica("Fortaleza", "CE", "Fortaleza")
+        self.assertEqual(resultado, merge.NIVEL_MESMO_MUNICIPIO)
+
+    def test_caso_2_outro_municipio_ce(self) -> None:
+        resultado = merge.classificar_origem_geografica("Fortaleza", "CE", "Sobral")
+        self.assertEqual(resultado, merge.NIVEL_OUTRO_MUNICIPIO_CE)
+
+    def test_caso_3_fora_do_estado(self) -> None:
+        # Cobre TODOS os estados do Brasil, exceto o CE (26 UFs) — garante
+        # que a classificacao escala para qualquer estado, nao so os
+        # exemplos mais comuns (SP, RJ etc.).
+        for uf in merge.UFS_BRASIL:
+            if uf == "CE":
+                continue
+            with self.subTest(uf=uf):
+                resultado = merge.classificar_origem_geografica("Fortaleza", uf, "Qualquer Município")
+                self.assertEqual(resultado, merge.NIVEL_FORA_DO_ESTADO)
+
+
+class BuscarMunicipiosUfTest(unittest.TestCase):
+    def test_retorna_nomes_ordenados_e_sem_duplicatas(self) -> None:
+        payload = [
+            {"nome": "Sobral"},
+            {"nome": "Fortaleza"},
+            {"nome": "Juazeiro do Norte"},
+            {"nome": "Sobral"},  # duplicata proposital
+        ]
+        with patch("app.pipeline.merge.requests.get") as mock_get:
+            mock_get.return_value = _fake_response(payload)
+            resultado = merge.buscar_municipios_uf("CE")
+
+        self.assertEqual(resultado, ["Fortaleza", "Juazeiro do Norte", "Sobral"])
+        mock_get.assert_called_once_with(
+            "https://servicodados.ibge.gov.br/api/v1/localidades/estados/CE/municipios",
+            timeout=10,
+        )
+
+    def test_uf_minuscula_e_normalizada_na_url(self) -> None:
+        with patch("app.pipeline.merge.requests.get") as mock_get:
+            mock_get.return_value = _fake_response([{"nome": "São Paulo"}])
+            merge.buscar_municipios_uf("sp")
+
+        mock_get.assert_called_once_with(
+            "https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP/municipios",
+            timeout=10,
+        )
 
 if __name__ == "__main__":
     unittest.main()
