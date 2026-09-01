@@ -25,6 +25,7 @@ def _int_env(key: str) -> int:
 
 
 DATABASE_URL = _env("DATABASE_URL")
+LOG_DATABASE_URL = _env("LOG_DATABASE_URL")
 TCE_CE_BASE_URL = _env("TCE_CE_BASE_URL", strip_slash=True)
 IBGE_LOCALIDADES_BASE_URL = _env("IBGE_LOCALIDADES_BASE_URL", strip_slash=True)
 PNCP_CONSULTA_BASE_URL = _env("PNCP_CONSULTA_BASE_URL", strip_slash=True)
@@ -35,3 +36,15 @@ UF_PADRAO = _env("UF_PADRAO")
 CODIGO_IBGE_PADRAO = _env("CODIGO_IBGE_PADRAO")
 CODIGO_MUNICIPIO_TCE_PADRAO = _env("CODIGO_MUNICIPIO_TCE_PADRAO")
 MODALIDADE_ID_PADRAO = _int_env("MODALIDADE_ID_PADRAO")
+
+# Escopo de despesas acompanhado pelo monitoraME. Esta tupla e a unica fonte
+# de verdade do filtro aplicado aos registros recebidos das fontes externas.
+NATUREZAS_DESPESA_CONSIDERADAS = (
+    "Outros serviços de terceiros-pessoa jurídica",
+    "Material de consumo",
+    "Obras e instalações",
+    "Equipamentos e material permanente",
+    "Material, bem ou serviço para distribuição gratuita",
+    "Serviços de tecnologia da informação e comunicação pessoa jurídica",
+    "Serviços de consultoria",
+)
