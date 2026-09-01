@@ -72,6 +72,7 @@ class ConfigTest(unittest.TestCase):
         )
         self.assertEqual(config.TCE_CE_BASE_URL, "https://api-dados-abertos.tce.ce.gov.br/sim")
         self.assertEqual(config.MODALIDADE_ID_PADRAO, 6)
+        self.assertEqual(len(config.NATUREZAS_DESPESA_CONSIDERADAS), 7)
 
 
 if __name__ == "__main__":

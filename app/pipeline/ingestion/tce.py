@@ -5,9 +5,14 @@ import json
 import requests
 
 from app.core.logging import executar_com_log_ingestao, registrar_falha_ingestao
+from app.core.config import (
+    CODIGO_MUNICIPIO_TCE_PADRAO,
+    NATUREZAS_DESPESA_CONSIDERADAS,
+    TCE_CE_BASE_URL,
+)
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
 from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
-from app.utils import normalizar_data
+from app.utils import normalizar_data, normalizar_texto, primeiro_valor
 
 BASE_URL = TCE_CE_BASE_URL
 TAMANHO_PAGINA = LIMITE_REGISTROS_POR_REQUISICAO
@@ -20,9 +25,34 @@ ENDPOINT_CONTRATOS = "contratos"
 ENDPOINT_CONTRATADOS = "contratados"
 ENDPOINT_ITENS = "itens_compoem_bens_servicos"
 
+_CAMINHOS_NATUREZA_DESPESA = (
+    ("natureza_despesa",),
+    ("descricao_natureza_despesa",),
+    ("nome_natureza_despesa",),
+    ("naturezaDespesa",),
+)
+_NATUREZAS_DESPESA_NORMALIZADAS = {
+    normalizar_texto(natureza) for natureza in NATUREZAS_DESPESA_CONSIDERADAS
+}
+
 
 def normalizar_data_tce(data: str) -> str:
     return normalizar_data(data, ("%Y-%m-%d", "%Y%m%d"), "%Y-%m-%d", "YYYY-MM-DD ou YYYYMMDD")
+
+
+def filtrar_naturezas_despesa(registros: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Descarta registros com natureza informada fora do escopo configurado.
+
+    Endpoints que nao fornecem natureza de despesa permanecem intactos. Isso
+    permite aplicar a regra na fronteira da ingestao sem eliminar contratos e
+    entidades cujo schema nao possui esse atributo.
+    """
+    filtrados: list[dict[str, Any]] = []
+    for registro in registros:
+        natureza = primeiro_valor(registro, _CAMINHOS_NATUREZA_DESPESA)
+        if natureza is None or normalizar_texto(natureza) in _NATUREZAS_DESPESA_NORMALIZADAS:
+            filtrados.append(registro)
+    return filtrados
 
 
 def buscar_dados_tce(endpoint: str, params: dict[str, Any], max_retries: int = 3) -> dict[str, Any]:
@@ -70,7 +100,8 @@ def listar_registros(endpoint: str, params: dict[str, Any]) -> list[dict[str, An
         ).get("elements", [])
         return pagina if isinstance(pagina, list) else []
 
-    return listar_por_start_index(buscar_pagina, tamanho_pagina=TAMANHO_PAGINA)
+    registros = listar_por_start_index(buscar_pagina, tamanho_pagina=TAMANHO_PAGINA)
+    return filtrar_naturezas_despesa(registros)
 
 
 def buscar_municipios() -> list[dict[str, Any]]:

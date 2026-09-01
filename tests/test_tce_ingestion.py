@@ -33,6 +33,32 @@ class TceIngestionTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             tce.normalizar_data_tce(20250107)
 
+    def test_filtrar_naturezas_despesa_descarta_registros_fora_da_lista(self) -> None:
+        registros = [
+            {"id": 1, "natureza_despesa": "Material de consumo"},
+            {"id": 2, "natureza_despesa": "Diarias - civil"},
+            {"id": 3, "natureza_despesa": "Servicos de consultoria"},
+        ]
+
+        filtrados = tce.filtrar_naturezas_despesa(registros)
+
+        self.assertEqual([registro["id"] for registro in filtrados], [1, 3])
+
+    def test_filtrar_naturezas_despesa_normaliza_acentos_e_hifens(self) -> None:
+        registros = [
+            {
+                "id": 1,
+                "descricao_natureza_despesa": "Outros serviços de terceiros-pessoa jurídica",
+            }
+        ]
+
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), registros)
+
+    def test_filtrar_naturezas_preserva_registro_sem_o_campo(self) -> None:
+        registros = [{"numero_contrato": "2025000123"}]
+
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), registros)
+
     @patch("app.pipeline.ingestion.tce.buscar_dados_tce")
     def test_listar_registros_usa_start_index(self, buscar_dados_tce) -> None:
         buscar_dados_tce.side_effect = [
