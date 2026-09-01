@@ -10,6 +10,7 @@ from app.core.config import (
     NATUREZAS_DESPESA_CONSIDERADAS,
     TCE_CE_BASE_URL,
 )
+from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
 from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
 from app.utils import normalizar_data, normalizar_texto, primeiro_valor
 

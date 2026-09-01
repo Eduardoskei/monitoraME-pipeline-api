@@ -22,7 +22,11 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import cleaning, merge
+from app.pipeline import merge
+from app.pipeline.cleaners import ibge as ibge_cleaning
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
+from app.pipeline.cleaners import pncp as pncp_cleaning
+from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, ibge, tce
 
 
@@ -73,7 +77,7 @@ def _tabelas_pncp_com_itens_e_contrato() -> dict[str, pd.DataFrame]:
             }
         ],
     }
-    return cleaning.limpar_pncp_contratacoes([registro])
+    return pncp_cleaning.limpar_contratacoes([registro])
 
 
 def _fornecedores_df_valido() -> pd.DataFrame:
@@ -85,7 +89,7 @@ def _fornecedores_df_valido() -> pd.DataFrame:
         }
         fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
-    return cleaning.limpar_fornecedores([fornecedor])
+    return opencnpj_cleaning.limpar_fornecedores([fornecedor])
 
 
 def _municipios_ibge_df() -> pd.DataFrame:
@@ -105,7 +109,7 @@ def _municipios_ibge_df() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.ibge.requests.get") as mock_get:
         mock_get.return_value = _fake_response([abaiara])
         registros = ibge.listar_municipios("CE")
-    return cleaning.limpar_ibge_municipios(registros)
+    return ibge_cleaning.limpar_municipios(registros)
 
 
 class JuntarItensPncpTest(unittest.TestCase):
@@ -236,7 +240,7 @@ def _df_tce_contratos() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
         registros = tce.buscar_contratos("20250101", "20250301", codigo_municipio="010")
-    return cleaning.limpar_tce(registros)
+    return tce_cleaning.limpar(registros)
 
 
 def _df_tce_contratados() -> pd.DataFrame:
@@ -254,7 +258,7 @@ def _df_tce_contratados() -> pd.DataFrame:
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
         registros = tce.buscar_contratados("20250101", "20250301", codigo_municipio="010")
-    return cleaning.limpar_tce(registros)
+    return tce_cleaning.limpar(registros)
 
 
 class MontarBaseTceTest(unittest.TestCase):
@@ -340,6 +344,61 @@ class UnirPncpETceTest(unittest.TestCase):
         resultado = merge.unir_pncp_e_tce(pd.DataFrame(), None)
         self.assertTrue(resultado.empty)
 
+def _fake_response(payload, status_code: int = 200) -> MagicMock:
+    resposta = MagicMock()
+    resposta.status_code = status_code
+    resposta.json.return_value = payload
+    resposta.raise_for_status.return_value = None
+    return resposta
+
+class ClassificarOrigemGeograficaTest(unittest.TestCase):
+    def test_caso_1_mesmo_municipio(self) -> None:
+        resultado = merge.classificar_origem_geografica("Fortaleza", "CE", "Fortaleza")
+        self.assertEqual(resultado, merge.NIVEL_MESMO_MUNICIPIO)
+
+    def test_caso_2_outro_municipio_ce(self) -> None:
+        resultado = merge.classificar_origem_geografica("Fortaleza", "CE", "Sobral")
+        self.assertEqual(resultado, merge.NIVEL_OUTRO_MUNICIPIO_CE)
+
+    def test_caso_3_fora_do_estado(self) -> None:
+        # Cobre TODOS os estados do Brasil, exceto o CE (26 UFs) — garante
+        # que a classificacao escala para qualquer estado, nao so os
+        # exemplos mais comuns (SP, RJ etc.).
+        for uf in merge.UFS_BRASIL:
+            if uf == "CE":
+                continue
+            with self.subTest(uf=uf):
+                resultado = merge.classificar_origem_geografica("Fortaleza", uf, "Qualquer Município")
+                self.assertEqual(resultado, merge.NIVEL_FORA_DO_ESTADO)
+
+
+class BuscarMunicipiosUfTest(unittest.TestCase):
+    def test_retorna_nomes_ordenados_e_sem_duplicatas(self) -> None:
+        payload = [
+            {"nome": "Sobral"},
+            {"nome": "Fortaleza"},
+            {"nome": "Juazeiro do Norte"},
+            {"nome": "Sobral"},  # duplicata proposital
+        ]
+        with patch("app.pipeline.merge.requests.get") as mock_get:
+            mock_get.return_value = _fake_response(payload)
+            resultado = merge.buscar_municipios_uf("CE")
+
+        self.assertEqual(resultado, ["Fortaleza", "Juazeiro do Norte", "Sobral"])
+        mock_get.assert_called_once_with(
+            "https://servicodados.ibge.gov.br/api/v1/localidades/estados/CE/municipios",
+            timeout=10,
+        )
+
+    def test_uf_minuscula_e_normalizada_na_url(self) -> None:
+        with patch("app.pipeline.merge.requests.get") as mock_get:
+            mock_get.return_value = _fake_response([{"nome": "São Paulo"}])
+            merge.buscar_municipios_uf("sp")
+
+        mock_get.assert_called_once_with(
+            "https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP/municipios",
+            timeout=10,
+        )
 
 if __name__ == "__main__":
     unittest.main()

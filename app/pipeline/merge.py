@@ -1,38 +1,13 @@
-"""
-app/pipeline/merge.py
-
-Camada de integracao (merge) entre as bases ja limpas por app.pipeline.cleaning:
-
-    - PNCP (contratacoes + itens + contratos)
-    - TCE-CE (contratos/contratados/processos/itens)
-    - IBGE (municipios)
-    - Fornecedores (OpenCNPJ)
-
-Cada fonte e limpa de forma independente em cleaning.py (uma funcao "limpar_*"
-por fonte, que nao sabe nada das outras). Este modulo e o unico lugar do
-projeto que cruza dados de fontes diferentes: junta as tabelas-filha do PNCP
-de volta a tabela-pai, enriquece contratos/contratados com os dados do
-fornecedor (porte, elegibilidade ME estrita) via CNPJ, e valida/enriquece o
-municipio do orgao contra a base oficial do IBGE.
-
-Todas as funcoes aqui recebem DataFrames JA LIMPOS (saida de cleaning.py) —
-este modulo nao faz chamada de rede nem parsing de JSON bruto, so join.
-"""
-
 from __future__ import annotations
 
 import pandas as pd
 
-from app.pipeline import cleaning
-
-# ---------------------------------------------------------------------------
-# 1. PNCP — junta as tabelas-filha (itens/contratos) de volta a tabela-pai
-# ---------------------------------------------------------------------------
-
+from app.pipeline.cleaners.ibge import validar_municipio_uf
+from app.utils import normalizar_cnpj
 
 def juntar_itens_pncp(tabelas: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
-    Achata o dict retornado por `cleaning.limpar_pncp_contratacoes` em uma
+    Achata o dict retornado por `cleaners.pncp.limpar_contratacoes` em uma
     unica tabela "contratacoes x itens" (left join por 'numero_controle_pncp'),
     para quando o consumo final precisa de 1 linha por item em vez de tabelas
     separadas. Contratacoes sem item (coleta sem `incluir_detalhes=True`)
@@ -88,7 +63,7 @@ def extrair_cnpjs_distintos(*colunas_cnpj: pd.Series | None) -> list[str]:
         if serie is None:
             continue
         for valor in serie.dropna():
-            cnpj = cleaning.normalizar_cnpj(valor)
+            cnpj = normalizar_cnpj(valor)
             if cnpj:
                 cnpjs.add(cnpj)
     return sorted(cnpjs)
@@ -101,7 +76,7 @@ def enriquecer_com_fornecedor(
     coluna_cnpj: str,
 ) -> pd.DataFrame:
     """
-    Left join dos dados ja limpos por `cleaning.limpar_fornecedores` em
+    Left join dos dados ja limpos por `cleaners.opencnpj.limpar_fornecedores` em
     qualquer tabela que tenha uma coluna de CNPJ do fornecedor/contratado.
     Traz porte/elegibilidade ME e razao social com o prefixo
     'fornecedor_', para nao colidir com colunas da tabela de origem.
@@ -113,7 +88,7 @@ def enriquecer_com_fornecedor(
     `coluna_cnpj` e normalizada internamente (so digitos) antes do join: o
     campo do PNCP que traz o CNPJ do fornecedor vencedor se chama
     'niFornecedor' (nao contem a palavra "cnpj"), entao ele nunca passa pela
-    normalizacao automatica de `cleaning.padronizar_documentos` — sem
+    normalizacao automatica de `app.utils.padronizar_documentos` — sem
     normalizar aqui tambem, o join falharia silenciosamente sempre que a
     formatacao dos dois lados divergisse.
     """
@@ -129,14 +104,14 @@ def enriquecer_com_fornecedor(
     referencia = referencia.rename(columns={"fornecedor_cnpj": chave_temp})
     referencia = referencia.drop_duplicates(subset=[chave_temp])
 
-    df[chave_temp] = df[coluna_cnpj].map(cleaning.normalizar_cnpj)
+    df[chave_temp] = df[coluna_cnpj].map(normalizar_cnpj)
     resultado = df.merge(referencia, on=chave_temp, how="left")
     return resultado.drop(columns=[chave_temp])
 
 
 # ---------------------------------------------------------------------------
 # 3. IBGE — enriquece/valida o municipio informado por outra fonte contra a
-#    base oficial (usa cleaning.validar_municipio_uf para o cruzamento)
+#    base oficial (usa cleaners.ibge.validar_municipio_uf para o cruzamento)
 # ---------------------------------------------------------------------------
 
 
@@ -147,7 +122,7 @@ def enriquecer_com_municipio(
     coluna_codigo_municipio: str,
 ) -> pd.DataFrame:
     """
-    Left join com a base de municipios do IBGE ja limpa (`cleaning.limpar_ibge_municipios`),
+    Left join com a base de municipios do IBGE ja limpa (`cleaners.ibge.limpar_municipios`),
     trazendo o nome/UF oficiais do municipio ('municipio_nome'/'municipio_uf')
     a partir do codigo IBGE informado pela outra fonte.
     """
@@ -177,13 +152,13 @@ def validar_e_enriquecer_municipio(
 ) -> pd.DataFrame:
     """
     Combina `enriquecer_com_municipio` (traz nome/UF oficiais para exibicao)
-    com `cleaning.validar_municipio_uf` (sinaliza divergencia entre a UF
+    com `cleaners.ibge.validar_municipio_uf` (sinaliza divergencia entre a UF
     informada pela fonte e a UF oficial do municipio), quando `coluna_uf` for
     passada.
     """
     df = enriquecer_com_municipio(df, municipios_ibge, coluna_codigo_municipio=coluna_codigo_municipio)
     if coluna_uf and municipios_ibge is not None and not municipios_ibge.empty:
-        df = cleaning.validar_municipio_uf(
+        df = validar_municipio_uf(
             df,
             municipios_ibge,
             coluna_codigo_municipio=coluna_codigo_municipio,
@@ -204,7 +179,7 @@ def montar_base_pncp(
     municipios_ibge: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """
-    Enriquece o dict retornado por `cleaning.limpar_pncp_contratacoes`:
+    Enriquece o dict retornado por `cleaners.pncp.limpar_contratacoes`:
       - 'contratacoes': valida/enriquece o municipio do orgao contra o IBGE
         (via 'unidade_orgao_codigo_ibge'/'unidade_orgao_uf_sigla'), quando
         `municipios_ibge` for informado;
@@ -251,7 +226,7 @@ def juntar_contratos_e_contratados(
     endpoint separado 'contratados'. Os dois se ligam por
     ('numero_contrato', 'codigo_municipio').
 
-    Faz o left join entre as duas tabelas ja limpas por `cleaning.limpar_tce`.
+    Faz o left join entre as duas tabelas ja limpas por `cleaners.tce.limpar`.
     Se `df_contratados` nao for informado (ou faltar a chave em algum dos
     lados), devolve `df_contratos` sem alteracao — nao inventa a chave.
     """
@@ -322,7 +297,7 @@ def unir_pncp_e_tce(
     ganha 'fonte' ('PNCP' ou 'TCE') indicando de onde veio.
 
     Ideal para comparar tabelas de granularidade equivalente, ex.:
-    `limpar_pncp_contratacoes(...)["contratacoes"]` com `limpar_tce(...)`,
+    `cleaners.pncp.limpar_contratacoes(...)["contratacoes"]` com `cleaners.tce.limpar(...)`,
     ou as versoes ja enriquecidas por `montar_base_pncp`/`montar_base_tce`
     (nesse caso, colunas de enriquecimento com o MESMO nome dos dois lados,
     como 'fornecedor_porte_padronizado', ficam alinhadas na mesma coluna —
@@ -350,3 +325,112 @@ def unir_pncp_e_tce(
         return pd.DataFrame()
 
     return pd.concat(partes, ignore_index=True, sort=False)
+
+# ---------------------------------------------------------------------------
+# 6. CLASSIFICACAO DE ORIGEM GEOGRAFICA — municipio do fornecedor/contratado
+#    em relacao ao municipio do orgao comprador
+# ---------------------------------------------------------------------------
+ 
+import unicodedata
+import unittest
+from unittest.mock import MagicMock, patch
+ 
+import requests
+ 
+NIVEL_MESMO_MUNICIPIO = "Sediado no município comprador"
+NIVEL_OUTRO_MUNICIPIO_CE = "Outro município do Ceará"
+NIVEL_FORA_DO_ESTADO = "Fora do estado"
+ 
+# Todas as 27 UFs do Brasil (26 estados + DF). Usada apenas para VALIDAR nos
+# testes que a classificacao cobre qualquer estado fora do Ceara — a funcao
+# `classificar_origem_geografica` em si NAO depende dessa lista: ela compara
+# a UF do fornecedor com a UF do comprador de forma generica (uf_forn !=
+# uf_comp), entao ja escala para qualquer UF sem precisar editar codigo.
+UFS_BRASIL = (
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+    "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+    "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+)
+ 
+ 
+def normalizar_texto(texto: str | None) -> str:
+    """
+    Remove acentos e padroniza caixa/espacos de um texto livre (municipio/UF),
+    para que a comparacao entre fontes diferentes (PNCP, TCE, IBGE) nao falhe
+    por divergencia de formatacao (ex.: 'Fortaleza' vs 'FORTALEZA ').
+    """
+    texto = str(texto or "").strip().upper()
+    return "".join(c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c))
+ 
+ 
+def classificar_origem_geografica(
+    municipio_comprador: str,
+    uf_fornecedor: str,
+    municipio_fornecedor: str,
+    uf_comprador: str = "CE",
+) -> str:
+    """
+    Classifica a origem do fornecedor/contratado em relacao ao municipio do
+    orgao comprador, em tres niveis:
+ 
+        1) 'Sediado no município comprador' — mesma UF e mesmo municipio;
+        2) 'Outro município do Ceará'       — mesma UF (CE), municipio diferente;
+        3) 'Fora do estado'                 — UF diferente da do comprador.
+ 
+    Recebe os valores ja resolvidos (ex.: 'municipio_nome'/'municipio_uf'
+    trazidos por `enriquecer_com_municipio` para o lado comprador, e
+    'fornecedor_*' — quando a base de fornecedores expuser municipio/UF —
+    para o lado fornecedor). Nao faz nenhum join; apenas compara os textos
+    ja normalizados.
+    """
+    uf_forn, uf_comp = normalizar_texto(uf_fornecedor), normalizar_texto(uf_comprador)
+    if uf_forn != uf_comp:
+        return NIVEL_FORA_DO_ESTADO
+    mesmo_municipio = normalizar_texto(municipio_fornecedor) == normalizar_texto(municipio_comprador)
+    return NIVEL_MESMO_MUNICIPIO if mesmo_municipio else NIVEL_OUTRO_MUNICIPIO_CE
+ 
+ 
+def classificar_dataframe(
+    df: pd.DataFrame,
+    col_municipio_comprador: str = "municipio_comprador",
+    col_uf_fornecedor: str = "uf_fornecedor",
+    col_municipio_fornecedor: str = "municipio_fornecedor",
+    uf_comprador: str = "CE",
+    nova_coluna: str = "origem_geografica",
+) -> pd.DataFrame:
+    """
+    Aplica `classificar_origem_geografica` a todas as linhas de `df`,
+    adicionando a coluna `nova_coluna` com o resultado. Nao filtra nem
+    remove linhas: quando faltar municipio/UF de algum dos lados, o
+    resultado da linha reflete o texto vazio ja normalizado (na pratica,
+    cai em 'Fora do estado' se a UF do fornecedor vier ausente).
+    """
+    df = df.copy()
+    df[nova_coluna] = df.apply(
+        lambda r: classificar_origem_geografica(
+            r[col_municipio_comprador], r[col_uf_fornecedor], r[col_municipio_fornecedor], uf_comprador
+        ),
+        axis=1,
+    )
+    return df
+ 
+ 
+def buscar_municipios_uf(uf: str = "CE") -> list[str]:
+    """
+    Busca, na API de Localidades do IBGE, os nomes de todos os municipios de
+    uma UF (padrao: Ceara). Retorna a lista ordenada alfabeticamente, ja sem
+    duplicatas.
+ 
+    Endpoint: https://servicodados.ibge.gov.br/api/v1/localidades/estados/{UF}/municipios
+ 
+    Pensado para escalar: recebe a UF como parametro (nao fixa "CE" no meio
+    do codigo), entao serve tanto para validar/enriquecer a classificacao de
+    origem geografica com a lista oficial de municipios do Ceara quanto para
+    qualquer outro estado que o projeto passe a cobrir no futuro.
+    """
+    url = f"https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf.upper()}/municipios"
+    resposta = requests.get(url, timeout=10)
+    resposta.raise_for_status()
+    dados = resposta.json()
+    return sorted({item["nome"] for item in dados if "nome" in item})
+ 

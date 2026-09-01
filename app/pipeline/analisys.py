@@ -1,7 +1,11 @@
 from typing import Any
 import pandas as pd
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import cleaning, kpis, merge
+from app.pipeline import kpis, merge
+from app.pipeline.cleaners import ibge as ibge_cleaning
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
+from app.pipeline.cleaners import pncp as pncp_cleaning
+from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
 
 
@@ -126,7 +130,7 @@ def _coletar_fornecedores(cnpjs: list[str], throttle_segundos: float) -> pd.Data
         return None
 
     registros = fornecedores.coletar_fornecedores_em_lote(cnpjs, throttle_segundos=throttle_segundos)
-    return cleaning.limpar_fornecedores(registros)
+    return opencnpj_cleaning.limpar_fornecedores(registros)
 
 
 def montar_base_pncp(
@@ -158,11 +162,11 @@ def montar_base_pncp(
         else publicacoes
     )
 
-    tabelas = cleaning.limpar_pncp_contratacoes(registros)
+    tabelas = pncp_cleaning.limpar_contratacoes(registros)
 
     municipios_df = None
     if enriquecer_municipios:
-        municipios_df = cleaning.limpar_ibge_municipios(ibge.listar_municipios(uf or UF_PADRAO))
+        municipios_df = ibge_cleaning.limpar_municipios(ibge.listar_municipios(uf or UF_PADRAO))
 
     fornecedores_df = None
     if enriquecer_fornecedores:
@@ -217,8 +221,11 @@ def montar_base_tce_contratos(
     contratos_brutos = tce.buscar_contratos(data_inicial, data_final, codigo_municipio=codigo_municipio)
     contratados_brutos = tce.buscar_contratados(data_inicial, data_final, codigo_municipio=codigo_municipio)
 
-    df_contratos = cleaning.limpar_tce(contratos_brutos, chave_duplicata=["numero_contrato", "codigo_municipio"])
-    df_contratados = cleaning.limpar_tce(
+    df_contratos = tce_cleaning.limpar(
+        contratos_brutos,
+        chave_duplicata=["numero_contrato", "codigo_municipio"],
+    )
+    df_contratados = tce_cleaning.limpar(
         contratados_brutos,
         chave_duplicata=["numero_contrato", "codigo_municipio", "numero_documento_negociante"],
     )

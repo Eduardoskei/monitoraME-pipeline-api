@@ -22,7 +22,9 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import cleaning, kpis, merge
+from app.pipeline import kpis, merge
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
+from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, tce
 
 
@@ -188,11 +190,11 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
 
         with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
             mock_get.return_value = _fake_response({"elements": registros_contratos})
-            df_contratos = cleaning.limpar_tce(tce.buscar_contratos("20250101", "20250301", codigo_municipio="010"))
+            df_contratos = tce_cleaning.limpar(tce.buscar_contratos("20250101", "20250301", codigo_municipio="010"))
 
         with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
             mock_get.return_value = _fake_response({"elements": registros_contratados})
-            df_contratados = cleaning.limpar_tce(
+            df_contratados = tce_cleaning.limpar(
                 tce.buscar_contratados("20250101", "20250301", codigo_municipio="010")
             )
 
@@ -205,7 +207,7 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
             brutos = fornecedores.coletar_fornecedores_em_lote(
                 ["11.444.777/0001-61", "98.765.432/0001-11"], throttle_segundos=0
             )
-        fornecedores_df = cleaning.limpar_fornecedores(brutos)
+        fornecedores_df = opencnpj_cleaning.limpar_fornecedores(brutos)
 
         base_tce = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)
 

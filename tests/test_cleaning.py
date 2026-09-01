@@ -22,7 +22,11 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import cleaning
+from app import utils
+from app.pipeline.cleaners import ibge as ibge_cleaning
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
+from app.pipeline.cleaners import pncp as pncp_cleaning
+from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
 
 
@@ -119,7 +123,7 @@ class LimparPncpContratacoesTest(unittest.TestCase):
         registros = pncp.buscar_contratacoes_publicadas("2025-01-01", "2025-03-01")
         self.assertEqual(len(registros), 4)  # ingestao real trouxe os 4 registros brutos
 
-        tabelas = cleaning.limpar_pncp_contratacoes(registros)
+        tabelas = pncp_cleaning.limpar_contratacoes(registros)
         df = tabelas["contratacoes"]
 
         self.assertEqual(len(df), 2)  # duplicata e registro sem chave removidos
@@ -174,7 +178,7 @@ class LimparPncpContratacoesTest(unittest.TestCase):
             ],
         }
 
-        tabelas = cleaning.limpar_pncp_contratacoes([registro])
+        tabelas = pncp_cleaning.limpar_contratacoes([registro])
 
         self.assertNotIn("itens", tabelas["contratacoes"].columns)
         self.assertIn("itens", tabelas)
@@ -199,7 +203,7 @@ class LimparPncpContratacoesTest(unittest.TestCase):
             ],
         }
 
-        tabelas = cleaning.limpar_pncp_contratacoes([registro])
+        tabelas = pncp_cleaning.limpar_contratacoes([registro])
 
         self.assertEqual(tabelas["contratos"]["ni_fornecedor"].iloc[0], "01234567000199")
 
@@ -278,7 +282,7 @@ class LimparTceTest(unittest.TestCase):
         registros = tce.buscar_contratos("20250101", "20250301", codigo_municipio="010")
         self.assertEqual(len(registros), 3)  # ingestao real trouxe os 3 registros brutos
 
-        df = cleaning.limpar_tce(registros, chave_duplicata=["numero_contrato"])
+        df = tce_cleaning.limpar(registros, chave_duplicata=["numero_contrato"])
 
         self.assertEqual(len(df), 2)  # duplicata removida
         # "codigo_municipio" e um identificador e nao pode virar numero, senao
@@ -382,7 +386,7 @@ class LimparIbgeMunicipiosTest(unittest.TestCase):
         registros = ibge.listar_municipios("CE")
         self.assertEqual(len(registros), 4)  # ingestao real trouxe os 4 registros brutos
 
-        df = cleaning.limpar_ibge_municipios(registros)
+        df = ibge_cleaning.limpar_municipios(registros)
 
         self.assertEqual(len(df), 2)  # sem id e duplicata removidos
         self.assertEqual(str(df["id"].dtype), "Int64")
@@ -430,7 +434,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         fornecedor_1 = fornecedores.coletar_fornecedor("11.444.777/0001-61")
         fornecedor_2 = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
-        df = cleaning.limpar_fornecedores([fornecedor_1, fornecedor_2])
+        df = opencnpj_cleaning.limpar_fornecedores([fornecedor_1, fornecedor_2])
 
         self.assertEqual(len(df), 1)  # duplicata pelo cnpj removida
         self.assertEqual(df.iloc[0]["cnpj"], "11444777000161")
@@ -456,7 +460,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         )
 
     def test_porte_da_opencnpj_pode_vir_aninhado(self) -> None:
-        df = cleaning.limpar_fornecedores([
+        df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "11444777000161",
                 "opencnpj": {"porte": {"descricao": "MICRO EMPRESA"}},
@@ -467,7 +471,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         self.assertTrue(df.iloc[0]["elegivel_me"])
 
     def test_epp_nao_e_elegivel_no_kpi_de_me(self) -> None:
-        df = cleaning.limpar_fornecedores([
+        df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "98765432000111",
                 "opencnpj": {"porte": "EMPRESA DE PEQUENO PORTE"},
@@ -478,7 +482,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         self.assertFalse(df.iloc[0]["elegivel_me"])
 
     def test_opcao_simples_e_mei_aceitam_ausente_e_texto(self) -> None:
-        df = cleaning.limpar_fornecedores(
+        df = opencnpj_cleaning.limpar_fornecedores(
             [
                 {
                     "cnpj": "11444777000161",
@@ -508,7 +512,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         self.assertTrue(pd.isna(por_cnpj.loc["98765432000111", "optante_mei"]))
 
     def test_sem_porte_mantem_elegibilidade_nula_para_kpi(self) -> None:
-        df = cleaning.limpar_fornecedores(
+        df = opencnpj_cleaning.limpar_fornecedores(
             [
                 {
                     "cnpj": "11444777000161",
@@ -529,7 +533,7 @@ class PadronizarNomesColunasTest(unittest.TestCase):
         # (o sufixo gerado para a 2a 'A' colidia com a coluna original 'A_1').
         df = pd.DataFrame([[1, 2, 3]], columns=["A", "A", "A_1"])
 
-        resultado = cleaning.padronizar_nomes_colunas(df)
+        resultado = utils.padronizar_nomes_colunas(df)
 
         self.assertEqual(len(set(resultado.columns)), 3)
         self.assertEqual(list(resultado.columns), ["a", "a_1", "a_1_1"])
@@ -549,7 +553,7 @@ class ConverterDatasTimestampTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.converter_datas(df, ["data_x"])
+        resultado = utils.converter_datas(df, ["data_x"])
 
         self.assertEqual(resultado["data_x"].tolist(), ["2025-01-15", "2025-01-15T09:30:00"])
 
@@ -558,23 +562,23 @@ class DocumentoValidationTest(unittest.TestCase):
     """Testes de unidade dos validadores de CNPJ/CPF (usados por padronizar_documentos)."""
 
     def test_validar_cnpj_aceita_digito_verificador_correto(self) -> None:
-        self.assertTrue(cleaning.validar_cnpj("11444777000161"))
+        self.assertTrue(utils.validar_cnpj("11444777000161"))
 
     def test_validar_cnpj_rejeita_digito_verificador_incorreto(self) -> None:
-        self.assertFalse(cleaning.validar_cnpj("12345678000199"))
+        self.assertFalse(utils.validar_cnpj("12345678000199"))
 
     def test_validar_cnpj_rejeita_sequencia_repetida(self) -> None:
-        self.assertFalse(cleaning.validar_cnpj("11111111111111"))
+        self.assertFalse(utils.validar_cnpj("11111111111111"))
 
     def test_validar_cpf_aceita_digito_verificador_correto(self) -> None:
-        self.assertTrue(cleaning.validar_cpf("11144477735"))
+        self.assertTrue(utils.validar_cpf("11144477735"))
 
     def test_validar_cpf_rejeita_digito_verificador_incorreto(self) -> None:
-        self.assertFalse(cleaning.validar_cpf("11144477736"))
+        self.assertFalse(utils.validar_cpf("11144477736"))
 
     def test_normalizar_cnpj_rejeita_quantidade_errada_de_digitos(self) -> None:
-        self.assertIsNone(cleaning.normalizar_cnpj("123"))
-        self.assertEqual(cleaning.normalizar_cnpj("11.444.777/0001-61"), "11444777000161")
+        self.assertIsNone(utils.normalizar_cnpj("123"))
+        self.assertEqual(utils.normalizar_cnpj("11.444.777/0001-61"), "11444777000161")
 
     def test_padronizar_documentos_detecta_colunas_cnpj_e_cpf_por_nome(self) -> None:
         df = pd.DataFrame(
@@ -584,7 +588,7 @@ class DocumentoValidationTest(unittest.TestCase):
             ]
         )
 
-        resultado = cleaning.padronizar_documentos(df)
+        resultado = utils.padronizar_documentos(df)
 
         self.assertEqual(resultado["cnpj_orgao"].tolist(), ["11444777000161", None])
         self.assertEqual(resultado["cnpj_orgao_valido"].tolist(), [True, False])
@@ -596,7 +600,7 @@ class DocumentoValidationTest(unittest.TestCase):
         # esta coluna viraria Int64 [1, 0, <NA>] em vez de continuar True/False/None.
         df = pd.DataFrame({"opcao_pelo_simples": [True, False, None]})
 
-        resultado = cleaning.converter_numericos(df)
+        resultado = utils.converter_numericos(df)
 
         self.assertEqual(resultado["opcao_pelo_simples"].tolist(), [True, False, None])
 
@@ -621,7 +625,7 @@ class ValidarMunicipioUfTest(unittest.TestCase):
         }
         mock_get.return_value = _fake_response([abaiara])
 
-        municipios = cleaning.limpar_ibge_municipios(ibge.listar_municipios("CE"))
+        municipios = ibge_cleaning.limpar_municipios(ibge.listar_municipios("CE"))
 
         # simula uma tabela de contratacoes ja limpa (PNCP), com o codigo IBGE do orgao
         contratacoes = pd.DataFrame(
@@ -635,7 +639,7 @@ class ValidarMunicipioUfTest(unittest.TestCase):
             ]
         )
 
-        resultado = cleaning.validar_municipio_uf(
+        resultado = ibge_cleaning.validar_municipio_uf(
             contratacoes,
             municipios,
             coluna_codigo_municipio="unidade_orgao_codigo_ibge",
