@@ -86,6 +86,18 @@ def _fornecedores_df_valido() -> pd.DataFrame:
             "cnpj": "11444777000161",
             "razao_social": "Comércio Exemplo LTDA",
             "porte": "MICRO EMPRESA",
+            "municipio": "AMONTADA",
+            "uf": "CE",
+            "atividade_principal": {
+                "codigo": "6201501",
+                "descricao": "Desenvolvimento de programas de computador sob encomenda",
+            },
+            "cnaes": [
+                {
+                    "cnae": "6201501",
+                    "descricao": "Desenvolvimento de programas de computador sob encomenda",
+                }
+            ],
         }
         fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
@@ -152,6 +164,43 @@ class EnriquecerComFornecedorTest(unittest.TestCase):
 
         nao_encontrado = resultado[resultado["contrato_id"] == 2].iloc[0]
         self.assertTrue(pd.isna(nao_encontrado["fornecedor_porte_padronizado"]))
+
+    def test_enriquece_despesa_com_porte_municipio_sede_e_cnae_para_cnpj_conhecido(self) -> None:
+        fornecedores_df = _fornecedores_df_valido()
+        despesas = pd.DataFrame(
+            [
+                {
+                    "despesa_id": "D1",
+                    "cnpj_fornecedor": "11.444.777/0001-61",
+                    "valor": 1500.0,
+                }
+            ]
+        )
+
+        resultado = merge.enriquecer_com_fornecedor(
+            despesas,
+            fornecedores_df,
+            coluna_cnpj="cnpj_fornecedor",
+        )
+
+        despesa = resultado.iloc[0]
+        self.assertEqual(despesa["fornecedor_porte_padronizado"], "ME")
+        self.assertEqual(despesa["fornecedor_municipio_sede"], "AMONTADA")
+        self.assertEqual(despesa["fornecedor_uf_sede"], "CE")
+        self.assertEqual(despesa["fornecedor_cnae_principal_codigo"], "6201501")
+        self.assertEqual(
+            despesa["fornecedor_cnae_principal_descricao"],
+            "Desenvolvimento de programas de computador sob encomenda",
+        )
+        self.assertEqual(
+            despesa["fornecedor_cnaes"],
+            [
+                {
+                    "cnae": "6201501",
+                    "descricao": "Desenvolvimento de programas de computador sob encomenda",
+                }
+            ],
+        )
 
 
 class ExtrairCnpjsDistintosTest(unittest.TestCase):
