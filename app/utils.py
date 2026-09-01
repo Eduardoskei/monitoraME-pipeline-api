@@ -31,17 +31,59 @@ def normalizar_texto(valor: Any) -> str:
     return " ".join(texto.replace("-", " ").split())
 
 
-def valor_preenchido(valor: Any) -> bool:
+def valor_preenchido(valor: Any, marcadores_vazios: Iterable[Any] = VALORES_VAZIOS) -> bool:
     """True para valores diferentes dos vazios usados pelas APIs."""
+    marcadores = tuple(marcadores_vazios)
     if valor is None:
         return False
+    try:
+        nulo = pd.isna(valor)
+        if not isinstance(nulo, (list, tuple)) and not getattr(nulo, "shape", None) and bool(nulo):
+            return False
+    except (TypeError, ValueError):
+        pass
+
     if isinstance(valor, str):
-        return valor != ""
+        texto = valor.strip()
+        if texto == "":
+            return False
+        marcadores_texto = {
+            marcador.strip()
+            for marcador in marcadores
+            if isinstance(marcador, str) and marcador.strip() != ""
+        }
+        return texto not in marcadores_texto
 
     try:
-        return bool(valor != "")
+        return valor not in marcadores
     except (TypeError, ValueError):
         return True
+
+
+def primeira_coluna_preenchida(
+    df: pd.DataFrame,
+    colunas: Iterable[str],
+    *,
+    marcadores_vazios: Iterable[Any] = VALORES_VAZIOS,
+) -> pd.Series:
+    """
+    Retorna, linha a linha, o primeiro valor preenchido entre colunas candidatas.
+
+    Colunas ausentes sao ignoradas para permitir cleaners resilientes a
+    pequenas variacoes de schema das fontes externas.
+    """
+    resultado = pd.Series([pd.NA] * len(df), index=df.index, dtype=object)
+    preenchido = pd.Series([False] * len(df), index=df.index)
+
+    for coluna in colunas:
+        if coluna not in df.columns:
+            continue
+        serie = df[coluna].astype(object)
+        usar = ~preenchido & serie.map(lambda valor: valor_preenchido(valor, marcadores_vazios))
+        resultado.loc[usar] = serie.loc[usar]
+        preenchido.loc[usar] = True
+
+    return resultado
 
 
 def get_nested(registro: dict[str, Any], caminho: tuple[str, ...]) -> Any:
@@ -223,7 +265,7 @@ def padronizar_textos(df: pd.DataFrame) -> pd.DataFrame:
 
 _PADRAO_COLUNA_IDENTIFICADOR = re.compile(
     r"(^|_)(codigo|cod|cnpj|cpf|cep|cep8|inscricao|controle|protocolo|"
-    r"telefone|celular|matricula|documento|numero|ni)($|_)"
+    r"telefone|celular|matricula|documento|numero|ni|cnae)($|_)"
 )
 
 

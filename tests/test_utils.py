@@ -6,6 +6,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pandas as pd
+
 from app import utils
 
 
@@ -39,6 +41,22 @@ class UtilsTest(unittest.TestCase):
             utils.normalizar_data("2025-01-07", ("%Y-%m-%d", "%Y%m%d"), "%Y%m%d", "YYYY-MM-DD ou YYYYMMDD"),
             "20250107",
         )
+
+    def test_primeira_coluna_preenchida_ignora_ausentes_nulos_e_marcadores(self) -> None:
+        df = pd.DataFrame(
+            {
+                "a": [pd.NA, "nao_informado", "valor_a"],
+                "b": ["valor_b1", "valor_b2", "valor_b3"],
+            }
+        )
+
+        resultado = utils.primeira_coluna_preenchida(
+            df,
+            ["coluna_ausente", "a", "b"],
+            marcadores_vazios=("", "nao_informado"),
+        )
+
+        self.assertEqual(resultado.tolist(), ["valor_b1", "valor_b2", "valor_a"])
 
 
 if __name__ == "__main__":
