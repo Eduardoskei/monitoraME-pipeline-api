@@ -45,7 +45,7 @@ os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
-from app.pipeline import cleaning
+from app.pipeline.cleaners import pncp as pncp_cleaning
 
 
 class NormalizarPortePncpTest(unittest.TestCase):
@@ -62,7 +62,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
         for entrada, esperado in casos.items():
             with self.subTest(entrada=entrada):
-                resultado = cleaning.normalizar_porte_pncp(entrada)
+                resultado = pncp_cleaning.normalizar_porte_pncp(entrada)
                 self.assertEqual(resultado, esperado)
 
     def test_aceita_codigos_em_formatos_numericos(self) -> None:
@@ -76,7 +76,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
         for entrada, esperado in casos:
             with self.subTest(entrada=entrada):
-                resultado = cleaning.normalizar_porte_pncp(entrada)
+                resultado = pncp_cleaning.normalizar_porte_pncp(entrada)
                 self.assertEqual(resultado, esperado)
 
     def test_aceita_descricoes_ja_padronizadas(self) -> None:
@@ -92,7 +92,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
         for entrada, esperado in casos:
             with self.subTest(entrada=entrada):
-                resultado = cleaning.normalizar_porte_pncp(entrada)
+                resultado = pncp_cleaning.normalizar_porte_pncp(entrada)
                 self.assertEqual(resultado, esperado)
 
     def test_retorna_none_para_valores_ausentes(self) -> None:
@@ -106,7 +106,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
         for entrada in valores_ausentes:
             with self.subTest(entrada=entrada):
-                resultado = cleaning.normalizar_porte_pncp(entrada)
+                resultado = pncp_cleaning.normalizar_porte_pncp(entrada)
                 self.assertIsNone(resultado)
 
     def test_retorna_none_para_valores_invalidos(self) -> None:
@@ -119,7 +119,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
         for entrada in valores_invalidos:
             with self.subTest(entrada=entrada):
-                resultado = cleaning.normalizar_porte_pncp(entrada)
+                resultado = pncp_cleaning.normalizar_porte_pncp(entrada)
                 self.assertIsNone(resultado)
 
 
@@ -141,7 +141,7 @@ class PadronizarPortePncpTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.padronizar_porte_pncp(entrada)
+        resultado = pncp_cleaning.padronizar_porte_pncp(entrada)
 
         esperado = pd.Series(
             [
@@ -169,7 +169,7 @@ class PadronizarPortePncpTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.padronizar_porte_pncp(entrada)
+        resultado = pncp_cleaning.padronizar_porte_pncp(entrada)
 
         self.assertEqual(
             resultado["porte_fornecedor_id"].tolist(),
@@ -183,7 +183,7 @@ class PadronizarPortePncpTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.padronizar_porte_pncp(entrada)
+        resultado = pncp_cleaning.padronizar_porte_pncp(entrada)
 
         self.assertIsNot(resultado, entrada)
 
@@ -204,7 +204,7 @@ class PadronizarPortePncpTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.padronizar_porte_pncp(entrada)
+        resultado = pncp_cleaning.padronizar_porte_pncp(entrada)
 
         self.assertIsNot(resultado, entrada)
 
@@ -223,7 +223,7 @@ class PadronizarPortePncpTest(unittest.TestCase):
             }
         )
 
-        resultado = cleaning.padronizar_porte_pncp(entrada)
+        resultado = pncp_cleaning.padronizar_porte_pncp(entrada)
 
         self.assertEqual(
             resultado.iloc[0]["porte_fornecedor_padronizado"],
@@ -245,7 +245,7 @@ class LimparResultadosPncpTest(unittest.TestCase):
             }
         ]
 
-        resultado = cleaning.limpar_pncp_resultados(registros)
+        resultado = pncp_cleaning.limpar_resultados(registros)
 
         self.assertEqual(len(resultado), 1)
         self.assertEqual(
