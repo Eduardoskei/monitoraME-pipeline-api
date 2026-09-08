@@ -71,6 +71,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
     ├── test_main.py
     ├── test_merge.py
     ├── test_pncp_ingestion.py
+    ├── test_port_pncp.py
     ├── test_tce_ingestion.py
     └── test_utils.py
 ```
