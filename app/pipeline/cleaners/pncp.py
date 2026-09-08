@@ -30,7 +30,11 @@ _MAPA_PORTE_PNCP = {
     "4": "NAO_SE_APLICA",
     "5": "NAO_INFORMADO",
 }
-_PORTES_PNCP = set(_MAPA_PORTE_PNCP.values())
+_MAPA_DESCRICAO_PORTE_PNCP = {
+    "MEI": "MEI",
+    "MICROEMPREENDEDOR_INDIVIDUAL": "MEI",
+}
+_PORTES_PNCP = set(_MAPA_PORTE_PNCP.values()) | set(_MAPA_DESCRICAO_PORTE_PNCP.values())
 
 
 def normalizar_porte_pncp(valor: Any) -> str | None:
@@ -50,7 +54,9 @@ def normalizar_porte_pncp(valor: Any) -> str | None:
 
     descricao = re.sub(r"[\s-]+", "_", texto)
     if descricao in _PORTES_PNCP:
-        return descricao
+        return _MAPA_DESCRICAO_PORTE_PNCP.get(descricao, descricao)
+    if descricao in _MAPA_DESCRICAO_PORTE_PNCP:
+        return _MAPA_DESCRICAO_PORTE_PNCP[descricao]
 
     try:
         numero = Decimal(texto)
@@ -66,12 +72,18 @@ def normalizar_porte_pncp(valor: Any) -> str | None:
 def padronizar_porte_pncp(df: pd.DataFrame) -> pd.DataFrame:
     """Adiciona a classificacao padronizada sem alterar a coluna original."""
     df = df.copy()
-    if "porte_fornecedor_id" not in df.columns:
+    colunas_origem = [
+        coluna
+        for coluna in ("porte_fornecedor_nome", "porte_fornecedor_id")
+        if coluna in df.columns
+    ]
+    if not colunas_origem:
         return df
 
-    df["porte_fornecedor_padronizado"] = (
-        df["porte_fornecedor_id"].map(normalizar_porte_pncp).astype("string")
-    )
+    porte = df[colunas_origem[0]].map(normalizar_porte_pncp)
+    for coluna in colunas_origem[1:]:
+        porte = porte.combine_first(df[coluna].map(normalizar_porte_pncp))
+    df["porte_fornecedor_padronizado"] = porte.astype("string")
     return df
 
 
@@ -83,6 +95,12 @@ def _limpar_tabela_filha(df: pd.DataFrame) -> pd.DataFrame:
     df = padronizar_documentos(df)
     df = padronizar_chaves_entidades(df)
     return remover_duplicatas(df)
+
+
+def limpar_resultados(registros: list[dict[str, Any]]) -> pd.DataFrame:
+    """Limpa resultados de itens do PNCP e padroniza o porte do fornecedor."""
+    df = padronizar_nomes_colunas(achatar_registros(registros))
+    return padronizar_porte_pncp(_limpar_tabela_filha(df))
 
 
 def limpar_contratacoes(registros: list[dict[str, Any]]) -> dict[str, pd.DataFrame]:
@@ -130,8 +148,9 @@ def limpar_contratacoes(registros: list[dict[str, Any]]) -> dict[str, pd.DataFra
                     chaves_resultado.append("numero_item")
                 resultados = achatar_lista_para_tabela(filha, "resultados", chaves_resultado)
                 if resultados is not None:
-                    resultados = _limpar_tabela_filha(resultados)
-                    tabelas["resultados"] = padronizar_porte_pncp(resultados)
+                    tabelas["resultados"] = padronizar_porte_pncp(
+                        _limpar_tabela_filha(resultados)
+                    )
                 filha = filha.drop(columns=["resultados"], errors="ignore")
 
             tabelas[coluna_lista] = _limpar_tabela_filha(filha)
@@ -143,6 +162,7 @@ def limpar_contratacoes(registros: list[dict[str, Any]]) -> dict[str, pd.DataFra
 
 __all__ = [
     "limpar_contratacoes",
+    "limpar_resultados",
     "normalizar_porte_pncp",
     "padronizar_porte_pncp",
 ]
