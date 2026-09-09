@@ -29,6 +29,13 @@ class IdentificadorCompra:
     sequencial_compra: int
 
 
+@dataclass(frozen=True)
+class IdentificadorPca:
+    cnpj_orgao: str
+    ano_pca: int
+    sequencial_pca: int
+
+
 def normalizar_data_pncp(data: str) -> str:
     return normalizar_data(data, ("%Y%m%d", "%Y-%m-%d"), "%Y%m%d", "YYYYMMDD ou YYYY-MM-DD")
 
@@ -205,6 +212,50 @@ def buscar_contratacoes_publicadas(
     )
 
 
+def buscar_contratacoes_atualizadas(
+    data_inicial: str,
+    data_final: str,
+    *,
+    modalidade_id: int = 6,
+    uf: str | None = "CE",
+    codigo_municipio_ibge: str | int | None = None,
+    cnpj_orgao: str | None = None,
+    max_paginas: int | None = None,
+) -> list[dict[str, Any]]:
+    params = {
+        "dataInicial": normalizar_data_pncp(data_inicial),
+        "dataFinal": normalizar_data_pncp(data_final),
+        "codigoModalidadeContratacao": modalidade_id,
+        "uf": uf,
+        "codigoMunicipioIbge": codigo_municipio_ibge,
+        "cnpj": somente_digitos(cnpj_orgao),
+    }
+    return _listar_paginas(
+        "/v1/contratacoes/atualizacao",
+        params,
+        tamanho_pagina=TAMANHO_PAGINA_CONTRATACOES,
+        max_paginas=max_paginas,
+    )
+
+
+def buscar_pcas_atualizados(
+    data_inicial: str,
+    data_final: str,
+    *,
+    max_paginas: int | None = None,
+) -> list[dict[str, Any]]:
+    params = {
+        "dataInicio": normalizar_data_pncp(data_inicial),
+        "dataFim": normalizar_data_pncp(data_final),
+    }
+    return _listar_paginas(
+        "/v1/pca/atualizacao",
+        params,
+        tamanho_pagina=TAMANHO_PAGINA_DETALHES,
+        max_paginas=max_paginas,
+    )
+
+
 def extrair_identificador_compra(registro: dict[str, Any]) -> IdentificadorCompra | None:
     cnpj = somente_digitos(
         _primeiro_valor(
@@ -237,12 +288,67 @@ def extrair_identificador_compra(registro: dict[str, Any]) -> IdentificadorCompr
         return None
 
 
+def extrair_identificador_pca(registro: dict[str, Any]) -> IdentificadorPca | None:
+    cnpj = somente_digitos(
+        _primeiro_valor(
+            registro,
+            (
+                ("orgaoEntidade", "cnpj"),
+                ("orgao", "cnpj"),
+                ("cnpjOrgao",),
+                ("cnpj",),
+                ("cnpjOrgaoEntidade",),
+            ),
+        )
+    )
+    ano = _primeiro_valor(registro, (("anoPca",), ("ano",), ("anoPlano",)))
+    sequencial = _primeiro_valor(
+        registro,
+        (
+            ("sequencialPca",),
+            ("sequencial",),
+            ("sequencialPlano",),
+        ),
+    )
+
+    if len(cnpj) != 14 or ano in (None, "") or sequencial in (None, ""):
+        return None
+
+    try:
+        return IdentificadorPca(cnpj, int(ano), int(sequencial))
+    except (TypeError, ValueError):
+        return None
+
+
 def consultar_compra(cnpj: str, ano: int, sequencial: int) -> dict[str, Any]:
     dados = _get_json(
         f"/v1/orgaos/{somente_digitos(cnpj)}/compras/{ano}/{sequencial}",
         base_url=CONSULTA_BASE_URL,
     )
     return dados if isinstance(dados, dict) else {}
+
+
+def consultar_pca_consolidado(cnpj: str, ano: int, sequencial: int) -> dict[str, Any]:
+    dados = _get_json(
+        f"/v1/orgaos/{somente_digitos(cnpj)}/pca/{ano}/{sequencial}/consolidado",
+        base_url=GESTAO_BASE_URL,
+    )
+    return dados if isinstance(dados, dict) else {}
+
+
+def consultar_itens_pca(
+    cnpj: str,
+    ano: int,
+    sequencial: int,
+    *,
+    categoria: int | None = None,
+) -> list[dict[str, Any]]:
+    return _listar_paginas(
+        f"/v1/orgaos/{somente_digitos(cnpj)}/pca/{ano}/{sequencial}/itens",
+        {"categoria": categoria},
+        base_url=GESTAO_BASE_URL,
+        tamanho_pagina=TAMANHO_PAGINA_DETALHES,
+    )
 
 
 def consultar_itens_compra(cnpj: str, ano: int, sequencial: int) -> list[dict[str, Any]]:
@@ -325,6 +431,49 @@ def coletar_compra_completa(cnpj: str, ano: int, sequencial: int) -> dict[str, A
         "itens": itens_com_resultados,
         "contratos": contratos_com_detalhes,
     }
+
+
+def montar_registro_compra_completo(publicacao: dict[str, Any]) -> dict[str, Any]:
+    identificador = extrair_identificador_compra(publicacao)
+    if identificador is None:
+        return dict(publicacao)
+
+    detalhe = coletar_compra_completa(
+        identificador.cnpj_orgao,
+        identificador.ano_compra,
+        identificador.sequencial_compra,
+    )
+    compra = detalhe.get("compra") if isinstance(detalhe.get("compra"), dict) else {}
+    registro = {**compra, **publicacao}
+
+    itens = []
+    for item_com_resultado in detalhe.get("itens", []):
+        if not isinstance(item_com_resultado, dict):
+            continue
+        item = item_com_resultado.get("item")
+        if not isinstance(item, dict):
+            continue
+        resultados = item_com_resultado.get("resultados")
+        itens.append({**item, "resultados": resultados if isinstance(resultados, list) else []})
+
+    contratos = []
+    for contrato_com_detalhe in detalhe.get("contratos", []):
+        if not isinstance(contrato_com_detalhe, dict):
+            continue
+        contrato = contrato_com_detalhe.get("contrato")
+        detalhe_contrato = contrato_com_detalhe.get("detalhe")
+        if not isinstance(contrato, dict):
+            continue
+        if not isinstance(detalhe_contrato, dict):
+            detalhe_contrato = {}
+        contratos.append({**detalhe_contrato, **contrato})
+
+    if itens:
+        registro["itens"] = itens
+    if contratos:
+        registro["contratos"] = contratos
+
+    return registro
 
 
 def coletar_compras_publicadas(

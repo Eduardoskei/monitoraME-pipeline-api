@@ -74,6 +74,59 @@ class PncpIngestionTest(unittest.TestCase):
 
         self.assertEqual(identificador, pncp.IdentificadorCompra("12345678000199", 2025, 7))
 
+    def test_extrair_identificador_pca_usa_campos_oficiais(self) -> None:
+        identificador = pncp.extrair_identificador_pca(
+            {
+                "cnpj": "12.345.678/0001-99",
+                "anoPca": 2026,
+                "sequencialPca": 3,
+            }
+        )
+
+        self.assertEqual(identificador, pncp.IdentificadorPca("12345678000199", 2026, 3))
+
+    @patch("app.pipeline.ingestion.pncp._listar_paginas")
+    def test_buscar_contratacoes_atualizadas_usa_endpoint_incremental(self, listar_paginas) -> None:
+        listar_paginas.return_value = []
+
+        pncp.buscar_contratacoes_atualizadas(
+            "2026-09-08",
+            "2026-09-09",
+            modalidade_id=6,
+            uf="CE",
+            max_paginas=2,
+        )
+
+        path, params = listar_paginas.call_args.args[:2]
+        self.assertEqual(path, "/v1/contratacoes/atualizacao")
+        self.assertEqual(params["dataInicial"], "20260908")
+        self.assertEqual(params["dataFinal"], "20260909")
+        self.assertEqual(params["codigoModalidadeContratacao"], 6)
+        self.assertEqual(params["uf"], "CE")
+        self.assertEqual(listar_paginas.call_args.kwargs["max_paginas"], 2)
+
+    @patch("app.pipeline.ingestion.pncp._listar_paginas")
+    def test_buscar_pcas_atualizados_usa_parametros_data_inicio_fim(self, listar_paginas) -> None:
+        listar_paginas.return_value = []
+
+        pncp.buscar_pcas_atualizados("2026-09-08", "2026-09-09", max_paginas=1)
+
+        path, params = listar_paginas.call_args.args[:2]
+        self.assertEqual(path, "/v1/pca/atualizacao")
+        self.assertEqual(params, {"dataInicio": "20260908", "dataFim": "20260909"})
+        self.assertEqual(listar_paginas.call_args.kwargs["tamanho_pagina"], pncp.TAMANHO_PAGINA_DETALHES)
+
+    @patch("app.pipeline.ingestion.pncp._listar_paginas")
+    def test_consultar_itens_pca_usa_api_de_gestao(self, listar_paginas) -> None:
+        listar_paginas.return_value = []
+
+        pncp.consultar_itens_pca("12.345.678/0001-99", 2026, 3, categoria=1)
+
+        path, params = listar_paginas.call_args.args[:2]
+        self.assertEqual(path, "/v1/orgaos/12345678000199/pca/2026/3/itens")
+        self.assertEqual(params, {"categoria": 1})
+        self.assertEqual(listar_paginas.call_args.kwargs["base_url"], pncp.GESTAO_BASE_URL)
+
     @patch("app.pipeline.ingestion.pncp.consultar_contratos_compra")
     @patch("app.pipeline.ingestion.pncp.consultar_resultados_item")
     @patch("app.pipeline.ingestion.pncp.consultar_itens_compra")

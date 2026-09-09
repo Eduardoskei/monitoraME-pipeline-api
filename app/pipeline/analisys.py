@@ -83,46 +83,7 @@ def _contratos_pncp_completos(registros: list[dict[str, Any]]) -> pd.Series | No
 
 
 def _montar_registro_pncp_completo(publicacao: dict[str, Any]) -> dict[str, Any]:
-    identificador = pncp.extrair_identificador_compra(publicacao)
-    if identificador is None:
-        return dict(publicacao)
-
-    detalhe = pncp.coletar_compra_completa(
-        identificador.cnpj_orgao,
-        identificador.ano_compra,
-        identificador.sequencial_compra,
-    )
-    compra = detalhe.get("compra") if isinstance(detalhe.get("compra"), dict) else {}
-    registro = {**compra, **publicacao}
-
-    itens = []
-    for item_com_resultado in detalhe.get("itens", []):
-        if not isinstance(item_com_resultado, dict):
-            continue
-        item = item_com_resultado.get("item")
-        if not isinstance(item, dict):
-            continue
-        resultados = item_com_resultado.get("resultados")
-        itens.append({**item, "resultados": resultados if isinstance(resultados, list) else []})
-
-    contratos = []
-    for contrato_com_detalhe in detalhe.get("contratos", []):
-        if not isinstance(contrato_com_detalhe, dict):
-            continue
-        contrato = contrato_com_detalhe.get("contrato")
-        detalhe_contrato = contrato_com_detalhe.get("detalhe")
-        if not isinstance(contrato, dict):
-            continue
-        if not isinstance(detalhe_contrato, dict):
-            detalhe_contrato = {}
-        contratos.append({**detalhe_contrato, **contrato})
-
-    if itens:
-        registro["itens"] = itens
-    if contratos:
-        registro["contratos"] = contratos
-
-    return registro
+    return pncp.montar_registro_compra_completo(publicacao)
 
 
 def _coletar_fornecedores(cnpjs: list[str], throttle_segundos: float) -> pd.DataFrame | None:

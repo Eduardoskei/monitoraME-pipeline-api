@@ -12,6 +12,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 - Enriquece fornecedores com dados cadastrais da OpenCNPJ.
 - Calcula KPI de participação mensal de ME em contratos do TCE-CE.
 - Mantém cache em Postgres para municípios IBGE e fornecedores ME.
+- Mantém ingestão incremental PNCP em alta frequência, com checkpoint, upsert idempotente e tabelas analíticas normalizadas.
 - Registra execuções de ingestão TCE-CE em uma tabela de logs no banco configurado por `LOG_DATABASE_URL`.
 
 ## Tree Do Projeto
@@ -44,12 +45,16 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 │   └── pipeline
 │       ├── __init__.py
 │       ├── analisys.py
+│       ├── pncp_incremental.py
 │       ├── cleaners
 │       │   ├── __init__.py
 │       │   ├── ibge.py
 │       │   ├── opencnpj.py
 │       │   ├── pncp.py
 │       │   └── tce.py
+│       ├── persistence
+│       │   ├── __init__.py
+│       │   └── pncp.py
 │       ├── kpis.py
 │       ├── merge.py
 │       └── ingestion
@@ -63,6 +68,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
     ├── test_analisys.py
     ├── test_cleaning.py
     ├── test_config.py
+    ├── test_database_pncp.py
     ├── test_fornecedores_ingestion.py
     ├── test_ibge_ingestion.py
     ├── test_kpis.py
@@ -70,7 +76,9 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
     ├── test_log_database.py
     ├── test_main.py
     ├── test_merge.py
+    ├── test_pncp_incremental.py
     ├── test_pncp_ingestion.py
+    ├── test_pncp_persistence.py
     ├── test_port_pncp.py
     ├── test_tce_ingestion.py
     └── test_utils.py
@@ -140,6 +148,9 @@ Variáveis esperadas:
 | `CODIGO_IBGE_PADRAO` | Sim | Código IBGE padrão do município. |
 | `CODIGO_MUNICIPIO_TCE_PADRAO` | Sim | Código interno do município no TCE-CE. |
 | `MODALIDADE_ID_PADRAO` | Sim | Modalidade padrão usada na consulta PNCP. |
+| `PNCP_MODALIDADES_INCREMENTAIS` | Não | Lista de modalidades PNCP separadas por vírgula para a rotina incremental. Padrão: `MODALIDADE_ID_PADRAO`. |
+| `PNCP_UFS_INCREMENTAIS` | Não | Lista de UFs separadas por vírgula para a rotina incremental. Padrão: `UF_PADRAO`. |
+| `PNCP_JANELA_INICIAL_HORAS` | Não | Janela usada quando ainda não há checkpoint válido. Padrão: `6`. |
 
 Valores padrão atuais em `.env.example`:
 
@@ -151,6 +162,9 @@ UF_PADRAO=CE
 CODIGO_IBGE_PADRAO=2304400
 CODIGO_MUNICIPIO_TCE_PADRAO=010
 MODALIDADE_ID_PADRAO=6
+PNCP_MODALIDADES_INCREMENTAIS=6
+PNCP_UFS_INCREMENTAIS=CE
+PNCP_JANELA_INICIAL_HORAS=6
 ```
 
 ### 3. Rode a API
@@ -179,6 +193,8 @@ app/pipeline/cleaners
         ↓
 app/pipeline/merge
         ↓
+app/pipeline/persistence
+        ↓
 app/pipeline/kpis
         ↓
 app/pipeline/analisys
@@ -191,8 +207,10 @@ Responsabilidades por módulo:
 - `app/main.py`: cria a aplicação FastAPI, registra rotas e inicializa/fecha o cache Postgres durante o lifespan.
 - `app/api/endpoints/`: define os endpoints HTTP e traduz erros de domínio em códigos HTTP.
 - `app/core/config.py`: carrega variáveis de ambiente obrigatórias via `python-dotenv`.
-- `app/core/database.py`: gerencia pool Postgres e tabelas de cache `ibge_municipios` e `fornecedores_me`.
+- `app/core/database.py`: gerencia pool Postgres, tabelas de cache e tabelas de controle/analíticas PNCP.
 - `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
+- `app/pipeline/pncp_incremental.py`: orquestra a carga incremental PNCP acionada pela rota da API.
+- `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente.
 - `app/utils.py`: concentra funções utilitárias compartilhadas, incluindo o motor genérico de normalização de estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
 - `app/pipeline/cleaners/pncp.py`, `tce.py`, `ibge.py` e `opencnpj.py`: aplicam as regras de limpeza específicas de cada API.
 - `app/pipeline/merge.py`: cruza tabelas limpas entre fontes e aplica enriquecimentos.
@@ -209,6 +227,30 @@ O cache mantém:
 - `fornecedores_me`: CNPJs de fornecedores confirmados como ME.
 
 As integrações com IBGE e OpenCNPJ usam esse cache para reduzir chamadas externas e reaproveitar dados já consultados.
+
+## Ingestão Incremental PNCP
+
+A ingestão incremental PNCP é acionada apenas pela rota da API. Quando ainda não há checkpoint válido, a primeira execução consulta a janela fixa configurada em `PNCP_JANELA_INICIAL_HORAS`, com padrão de 6 horas.
+
+O escopo inicial acompanha todos os municípios do Ceará (`PNCP_UFS_INCREMENTAIS=CE`) e a modalidade `6` (`PNCP_MODALIDADES_INCREMENTAIS=6`). Para expansão futura, as duas variáveis aceitam listas separadas por vírgula.
+
+A carga usa como controle temporal os campos `dataPublicacaoPncp`, `dataAtualizacao` e `dataAtualizacaoGlobal`. Como alguns endpoints do PNCP retornam apenas data sem horário, a rotina reconsulta o dia do checkpoint e depende do upsert por identificadores oficiais para evitar duplicidade.
+
+Tabelas criadas no `DATABASE_URL`:
+
+- `pncp_ingestion_state`: checkpoint por escopo.
+- `pncp_ingestion_runs`: controle de execução com horário, janela, status, quantidades e erro.
+- `pncp_contratacoes`, `pncp_itens`, `pncp_resultados`, `pncp_contratos`: dados normalizados de contratações PNCP.
+- `pncp_pca_planos`, `pncp_pca_itens`: planos e itens do PCA.
+- `pncp_fornecedores`: dados cadastrais dos fornecedores consultados via OpenCNPJ.
+
+O checkpoint só avança depois que a extração, padronização, deduplicação, classificação, persistência e registro de execução terminam com sucesso. Em caso de falha, a execução é registrada como `falha` e a próxima rodada reprocessa a mesma janela.
+
+Acionamento:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/pipeline/pncp/ingestao-incremental"
+```
 
 ## Logs De Ingestão TCE-CE
 

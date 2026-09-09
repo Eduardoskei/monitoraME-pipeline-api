@@ -160,8 +160,75 @@ def limpar_contratacoes(registros: list[dict[str, Any]]) -> dict[str, pd.DataFra
     return tabelas
 
 
+def limpar_pca_planos(registros: list[dict[str, Any]]) -> pd.DataFrame:
+    """Limpa os planos de contratacao anual do PNCP."""
+    colunas_data = [
+        "data_publicacao_pncp",
+        "data_inclusao",
+        "data_atualizacao",
+        "data_atualizacao_global",
+    ]
+    colunas_numericas = ["quantidade", "quantidade_itens", "valor_total"]
+
+    df = achatar_registros(registros)
+    if df.empty:
+        return df
+
+    df = padronizar_nomes_colunas(df)
+    df = padronizar_textos(df)
+    df = converter_numericos(df, [c for c in colunas_numericas if c in df.columns])
+    df = converter_datas(df, [c for c in colunas_data if c in df.columns])
+    df = padronizar_documentos(df)
+    df = padronizar_chaves_entidades(df)
+    df = tratar_nulos(df)
+
+    chave = [
+        c
+        for c in ("numero_controle_pncp", "cnpj", "ano_pca", "sequencial_pca")
+        if c in df.columns
+    ]
+    return remover_duplicatas(df, subset=chave or None)
+
+
+def limpar_pca_itens(registros: list[dict[str, Any]]) -> pd.DataFrame:
+    """Limpa os itens do plano de contratacao anual do PNCP."""
+    colunas_data = [
+        "data_desejada",
+        "data_publicacao_pncp",
+        "data_inclusao",
+        "data_atualizacao",
+    ]
+    colunas_numericas = [
+        "quantidade",
+        "valor_unitario",
+        "valor_total",
+        "valor_orcamento_exercicio",
+    ]
+
+    df = achatar_registros(registros)
+    if df.empty:
+        return df
+
+    df = padronizar_nomes_colunas(df)
+    df = padronizar_textos(df)
+    df = converter_numericos(df, [c for c in colunas_numericas if c in df.columns])
+    df = converter_datas(df, [c for c in colunas_data if c in df.columns])
+    df = padronizar_documentos(df)
+    df = padronizar_chaves_entidades(df)
+    df = tratar_nulos(df)
+
+    chave = [
+        c
+        for c in ("numero_controle_pncp", "cnpj", "ano_pca", "sequencial_pca", "numero_item")
+        if c in df.columns
+    ]
+    return remover_duplicatas(df, subset=chave or None)
+
+
 __all__ = [
     "limpar_contratacoes",
+    "limpar_pca_itens",
+    "limpar_pca_planos",
     "limpar_resultados",
     "normalizar_porte_pncp",
     "padronizar_porte_pncp",

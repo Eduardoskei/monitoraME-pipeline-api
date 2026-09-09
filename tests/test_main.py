@@ -81,6 +81,7 @@ class MainTest(unittest.TestCase):
         rotas = _route_paths(main.app.routes)
 
         self.assertIn("/pipeline/pncp/contratacoes", rotas)
+        self.assertIn("/pipeline/pncp/ingestao-incremental", rotas)
         self.assertIn("/pipeline/tce/contratos", rotas)
         self.assertIn("/pipeline/tce/kpis/me-por-mes", rotas)
 
@@ -150,6 +151,23 @@ class MainTest(unittest.TestCase):
 
         self.assertEqual(contexto.exception.status_code, 503)
         self.assertEqual(contexto.exception.detail, "PNCP indisponivel")
+
+    @patch("app.api.endpoints.pipeline.pncp_incremental.executar_ingestao_incremental_pncp")
+    def test_endpoint_pncp_ingestao_incremental_retorna_resumo(self, executar_ingestao) -> None:
+        executar_ingestao.return_value = {
+            "fonte": "PNCP",
+            "status_execucao": "sucesso",
+            "quantidade_lida": 2,
+            "quantidade_inserida": 1,
+            "quantidade_atualizada": 1,
+            "quantidade_com_erro": 0,
+        }
+
+        resposta = main.pncp_ingestao_incremental(max_paginas=1)
+
+        executar_ingestao.assert_called_once_with(max_paginas=1)
+        self.assertEqual(resposta["status_execucao"], "sucesso")
+        self.assertEqual(resposta["quantidade_lida"], 2)
 
 
 if __name__ == "__main__":
