@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -21,73 +22,197 @@ os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
-from app.core import database
+from app.core import database, orm
+from app.core.models import FornecedorMe, IbgeMunicipio, PncpIngestionRun, PncpIngestionState
 
 
-class FakeCursor:
+class FakeConnection:
     def __init__(self) -> None:
-        self.executions: list[str] = []
+        self.executions: list[object] = []
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> "FakeConnection":
         return self
 
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def execute(self, sql: str, _params: tuple[object, ...] | None = None) -> None:
-        self.executions.append(sql)
+    def execute(self, statement: object) -> None:
+        self.executions.append(statement)
 
 
-class FakeConn:
+class FakeEngine:
     def __init__(self) -> None:
-        self.cursor_obj = FakeCursor()
+        self.connection = FakeConnection()
+        self.raw_connection_obj = MagicMock()
 
-    def __enter__(self) -> "FakeConn":
-        return self
+    def connect(self) -> FakeConnection:
+        return self.connection
 
-    def __exit__(self, *_args: object) -> None:
-        return None
-
-    def cursor(self) -> FakeCursor:
-        return self.cursor_obj
+    def raw_connection(self):
+        return self.raw_connection_obj
 
 
-class DatabasePncpSchemaTest(unittest.TestCase):
+@contextmanager
+def fake_main_session(session: MagicMock):
+    yield session
+
+
+class DatabasePncpTest(unittest.TestCase):
     def setUp(self) -> None:
         database._schema_initialized = False
 
     def tearDown(self) -> None:
+        orm.dispose_main_engine()
         database._schema_initialized = False
 
-    def test_init_db_cria_tabelas_pncp_incrementais(self) -> None:
-        conn = FakeConn()
+    def test_init_db_valida_conexao_do_engine_principal(self) -> None:
+        engine = FakeEngine()
 
-        with (
-            patch("app.core.database.get_conn", return_value=conn),
-            patch("app.core.database.put_conn"),
-        ):
+        with patch("app.core.database.orm.get_main_engine", return_value=engine) as get_main_engine:
+            database.init_db()
             database.init_db()
 
-        sql = "\n".join(conn.cursor_obj.executions)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_ingestion_state", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_ingestion_runs", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_contratacoes", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_itens", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_resultados", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_contratos", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_pca_planos", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_pca_itens", sql)
-        self.assertIn("CREATE TABLE IF NOT EXISTS pncp_fornecedores", sql)
+        get_main_engine.assert_called_once_with()
+        self.assertEqual(len(engine.connection.executions), 1)
+        self.assertEqual(str(engine.connection.executions[0]), "SELECT 1")
+        self.assertTrue(database._schema_initialized)
 
-    def test_registrar_sucesso_e_checkpoint_grava_execucao_e_estado_na_mesma_conexao(self) -> None:
-        conn = FakeConn()
+    @patch("app.core.database.orm.dispose_main_engine")
+    def test_close_pool_descarta_engine_e_reseta_estado(self, dispose_main_engine) -> None:
+        database._schema_initialized = True
+
+        database.close_pool()
+
+        dispose_main_engine.assert_called_once_with()
+        self.assertFalse(database._schema_initialized)
+
+    def test_get_conn_retorna_adaptador_de_raw_connection_temporario(self) -> None:
+        engine = FakeEngine()
+
+        with patch("app.core.database.orm.get_main_engine", return_value=engine):
+            conn = database.get_conn()
+            with conn as adapter:
+                self.assertIs(adapter, conn)
+            database.put_conn(conn)
+
+        engine.raw_connection_obj.commit.assert_called_once_with()
+        engine.raw_connection_obj.rollback.assert_not_called()
+        engine.raw_connection_obj.close.assert_called_once_with()
+
+    def test_raw_connection_adapter_faz_rollback_em_erro(self) -> None:
+        raw_connection = MagicMock()
+        conn = database.RawConnectionAdapter(raw_connection)
+
+        with self.assertRaisesRegex(RuntimeError, "falhou"):
+            with conn:
+                raise RuntimeError("falhou")
+
+        raw_connection.commit.assert_not_called()
+        raw_connection.rollback.assert_called_once_with()
+
+    def test_salvar_municipios_ibge_usa_modelos_orm_e_ignora_invalidos(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+        municipios = [
+            {"id": 2304400, "nome": "Fortaleza"},
+            {"id": None, "nome": "Invalido"},
+        ]
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            quantidade = database.salvar_municipios_ibge(municipios, "CE")
+
+        self.assertEqual(quantidade, 1)
+        session.merge.assert_called_once()
+        municipio = session.merge.call_args.args[0]
+        self.assertIsInstance(municipio, IbgeMunicipio)
+        self.assertEqual(municipio.codigo_municipio, "2304400")
+        self.assertEqual(municipio.nome, "Fortaleza")
+        self.assertEqual(municipio.uf, "CE")
+
+    def test_listar_municipios_ibge_serializa_modelos(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+        session.scalars.return_value.all.return_value = [
+            IbgeMunicipio(codigo_municipio="2301000", nome="Abaiara", uf="CE"),
+            IbgeMunicipio(codigo_municipio="2304400", nome="Fortaleza", uf="CE"),
+        ]
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            municipios = database.listar_municipios_ibge("CE")
+
+        self.assertEqual(
+            municipios,
+            [
+                {"id": "2301000", "codigo_municipio": "2301000", "nome": "Abaiara", "uf": "CE"},
+                {"id": "2304400", "codigo_municipio": "2304400", "nome": "Fortaleza", "uf": "CE"},
+            ],
+        )
+        session.scalars.assert_called_once()
+
+    def test_localizar_municipio_ibge_usa_session_get(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+        session.get.return_value = IbgeMunicipio(codigo_municipio="2304400", nome="Fortaleza", uf="CE")
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            municipio = database.localizar_municipio_ibge(2304400)
+
+        session.get.assert_called_once_with(IbgeMunicipio, "2304400")
+        self.assertEqual(municipio, {"id": "2304400", "codigo_municipio": "2304400", "nome": "Fortaleza", "uf": "CE"})
+
+    def test_salvar_fornecedor_me_usa_modelo_orm(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            database.salvar_fornecedor_me("12345678000199", "EMPRESA TESTE LTDA", "ME")
+
+        fornecedor = session.merge.call_args.args[0]
+        self.assertIsInstance(fornecedor, FornecedorMe)
+        self.assertEqual(fornecedor.cnpj, "12345678000199")
+        self.assertEqual(fornecedor.razao_social, "EMPRESA TESTE LTDA")
+        self.assertEqual(fornecedor.porte, "ME")
+
+    def test_localizar_fornecedor_me_usa_session_get(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+        session.get.return_value = FornecedorMe(
+            cnpj="12345678000199",
+            razao_social="EMPRESA TESTE LTDA",
+            porte="ME",
+        )
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            fornecedor = database.localizar_fornecedor_me("12345678000199")
+
+        session.get.assert_called_once_with(FornecedorMe, "12345678000199")
+        self.assertEqual(
+            fornecedor,
+            {"cnpj": "12345678000199", "razao_social": "EMPRESA TESTE LTDA", "porte": "ME"},
+        )
+
+    def test_buscar_checkpoint_pncp_retorna_data_do_estado(self) -> None:
+        session = MagicMock()
         database._schema_initialized = True
         instante = datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc)
+        session.get.return_value = PncpIngestionState(
+            escopo="pncp:ufs=CE:modalidades=6",
+            ultima_execucao_sucesso=instante,
+            parametros={},
+        )
 
-        with (
-            patch("app.core.database.get_conn", return_value=conn),
-            patch("app.core.database.put_conn") as put_conn,
-        ):
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
+            checkpoint = database.buscar_checkpoint_pncp("pncp:ufs=CE:modalidades=6")
+
+        session.get.assert_called_once_with(PncpIngestionState, "pncp:ufs=CE:modalidades=6")
+        self.assertEqual(checkpoint, instante)
+
+    def test_registrar_sucesso_e_checkpoint_grava_execucao_e_estado_na_mesma_sessao(self) -> None:
+        session = MagicMock()
+        database._schema_initialized = True
+        instante = datetime(2026, 9, 9, 15, 0, tzinfo=timezone(timedelta(hours=-3)))
+
+        with patch("app.core.database.orm.main_session", return_value=fake_main_session(session)):
             database.registrar_sucesso_e_checkpoint_pncp(
                 escopo="pncp:ufs=CE:modalidades=6",
                 executado_em=instante,
@@ -96,14 +221,27 @@ class DatabasePncpSchemaTest(unittest.TestCase):
                 quantidade_lida=2,
                 quantidade_inserida=1,
                 quantidade_atualizada=1,
-                parametros={"uf": "CE"},
+                parametros={"quando": instante},
                 totais={"contratacoes": 1},
             )
 
-        sql = "\n".join(conn.cursor_obj.executions)
-        self.assertIn("INSERT INTO pncp_ingestion_runs", sql)
-        self.assertIn("INSERT INTO pncp_ingestion_state", sql)
-        put_conn.assert_called_once_with(conn)
+        session.add.assert_called_once()
+        run = session.add.call_args.args[0]
+        self.assertIsInstance(run, PncpIngestionRun)
+        self.assertEqual(run.status_execucao, "sucesso")
+        self.assertEqual(run.executado_em, datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc))
+        self.assertEqual(run.quantidade_lida, 2)
+        self.assertEqual(run.quantidade_com_erro, 0)
+        self.assertEqual(run.parametros, {"quando": "2026-09-09 15:00:00-03:00"})
+        self.assertEqual(run.totais, {"contratacoes": 1})
+
+        session.merge.assert_called_once()
+        state = session.merge.call_args.args[0]
+        self.assertIsInstance(state, PncpIngestionState)
+        self.assertEqual(state.escopo, "pncp:ufs=CE:modalidades=6")
+        self.assertEqual(state.ultima_execucao_sucesso, datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc))
+        self.assertEqual(state.parametros, {"quando": "2026-09-09 15:00:00-03:00"})
+        self.assertIsNotNone(state.atualizado_em)
 
 
 if __name__ == "__main__":
