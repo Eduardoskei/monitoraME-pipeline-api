@@ -105,6 +105,8 @@ Dependências Python principais:
 - `plotly`
 - `requests`
 - `psycopg2-binary`
+- `SQLAlchemy`
+- `alembic`
 - `pydantic`
 - `python-dotenv`
 
@@ -167,7 +169,18 @@ PNCP_UFS_INCREMENTAIS=CE
 PNCP_JANELA_INICIAL_HORAS=6
 ```
 
-### 3. Rode a API
+### 3. Rode as migrations
+
+O banco principal (`DATABASE_URL`) e o banco de logs (`LOG_DATABASE_URL`) usam ambientes Alembic separados:
+
+```bash
+alembic upgrade head
+alembic -n logs upgrade head
+```
+
+Na fase atual de transição, o lifespan da API valida as conexões dos bancos ao subir. Novas alterações de schema devem ser feitas por migrations.
+
+### 4. Rode a API
 
 ```bash
 uvicorn app.main:app --reload
@@ -204,10 +217,10 @@ app/api/endpoints
 
 Responsabilidades por módulo:
 
-- `app/main.py`: cria a aplicação FastAPI, registra rotas e inicializa/fecha o cache Postgres durante o lifespan.
+- `app/main.py`: cria a aplicação FastAPI, registra rotas e valida/fecha conexões Postgres durante o lifespan.
 - `app/api/endpoints/`: define os endpoints HTTP e traduz erros de domínio em códigos HTTP.
 - `app/core/config.py`: carrega variáveis de ambiente obrigatórias via `python-dotenv`.
-- `app/core/database.py`: gerencia pool Postgres, tabelas de cache e tabelas de controle/analíticas PNCP.
+- `app/core/database.py`: concentra o acesso ORM ao banco principal e mantém uma ponte temporária para a persistência PNCP ainda baseada em cursor.
 - `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
 - `app/pipeline/pncp_incremental.py`: orquestra a carga incremental PNCP acionada pela rota da API.
 - `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente.
@@ -219,7 +232,7 @@ Responsabilidades por módulo:
 
 ## Cache Postgres
 
-O Postgres é obrigatório para a API subir. `DATABASE_URL` precisa estar preenchida no ambiente ou no `.env`; se estiver ausente/vazia, a configuração falha na inicialização. Durante o lifespan, a API inicializa o schema do cache e encerra o pool ao desligar.
+O Postgres é obrigatório para a API subir. `DATABASE_URL` precisa estar preenchida no ambiente ou no `.env`; se estiver ausente/vazia, a configuração falha na inicialização. O schema é gerenciado por Alembic e, durante esta etapa de transição, o lifespan valida a conexão antes de encerrar o pool ao desligar.
 
 O cache mantém:
 
@@ -236,7 +249,7 @@ O escopo inicial acompanha todos os municípios do Ceará (`PNCP_UFS_INCREMENTAI
 
 A carga usa como controle temporal os campos `dataPublicacaoPncp`, `dataAtualizacao` e `dataAtualizacaoGlobal`. Como alguns endpoints do PNCP retornam apenas data sem horário, a rotina reconsulta o dia do checkpoint e depende do upsert por identificadores oficiais para evitar duplicidade.
 
-Tabelas criadas no `DATABASE_URL`:
+Tabelas gerenciadas no `DATABASE_URL`:
 
 - `pncp_ingestion_state`: checkpoint por escopo.
 - `pncp_ingestion_runs`: controle de execução com horário, janela, status, quantidades e erro.
@@ -254,7 +267,7 @@ curl -X POST "http://127.0.0.1:8000/pipeline/pncp/ingestao-incremental"
 
 ## Logs De Ingestão TCE-CE
 
-A ingestão TCE-CE grava uma linha por execução das funções públicas de coleta (`buscar_contratos`, `buscar_contratados`, `buscar_contratacoes`, `buscar_itens_contratacao` e `buscar_municipios`) na tabela `logs_ingestao`, criada automaticamente no banco apontado por `LOG_DATABASE_URL`.
+A ingestão TCE-CE grava uma linha por execução das funções públicas de coleta (`buscar_contratos`, `buscar_contratados`, `buscar_contratacoes`, `buscar_itens_contratacao` e `buscar_municipios`) na tabela `logs_ingestao`, gerenciada pelo ambiente Alembic `logs` no banco apontado por `LOG_DATABASE_URL`.
 
 Cada registro inclui fonte, etapa, status, data/hora de início e término, quantidade de registros processados, quantidade de falhas ocorridas, parâmetros da execução, totais em JSONB e mensagem de erro quando houver.
 

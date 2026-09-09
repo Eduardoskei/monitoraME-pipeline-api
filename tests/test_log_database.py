@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -23,34 +23,35 @@ os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 from app.core import log_database
+from app.core import orm
+from app.core.log_models import LogIngestao
 
 
-class FakeCursor:
+class FakeConnection:
     def __init__(self) -> None:
-        self.executions: list[tuple[str, tuple[object, ...] | None]] = []
+        self.executions: list[object] = []
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> "FakeConnection":
         return self
 
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def execute(self, sql: str, params: tuple[object, ...] | None = None) -> None:
-        self.executions.append((sql, params))
+    def execute(self, statement: object) -> None:
+        self.executions.append(statement)
 
 
-class FakeConn:
+class FakeEngine:
     def __init__(self) -> None:
-        self.cursor_obj = FakeCursor()
+        self.connection = FakeConnection()
 
-    def __enter__(self) -> "FakeConn":
-        return self
+    def connect(self) -> FakeConnection:
+        return self.connection
 
-    def __exit__(self, *_args: object) -> None:
-        return None
 
-    def cursor(self) -> FakeCursor:
-        return self.cursor_obj
+@contextmanager
+def fake_log_session(session: MagicMock):
+    yield session
 
 
 class LogDatabaseTest(unittest.TestCase):
@@ -58,33 +59,37 @@ class LogDatabaseTest(unittest.TestCase):
         log_database._log_schema_initialized = False
 
     def tearDown(self) -> None:
+        orm.dispose_log_engine()
         log_database._log_schema_initialized = False
 
-    def test_init_log_db_cria_tabela_e_indices(self) -> None:
-        conn = FakeConn()
+    def test_init_log_db_valida_conexao_do_engine_de_logs(self) -> None:
+        engine = FakeEngine()
 
-        with (
-            patch("app.core.log_database.get_log_conn", return_value=conn),
-            patch("app.core.log_database.put_log_conn") as put_log_conn,
-        ):
+        with patch("app.core.log_database.orm.get_log_engine", return_value=engine) as get_log_engine:
+            log_database.init_log_db()
             log_database.init_log_db()
 
-        sqls = [sql for sql, _params in conn.cursor_obj.executions]
-        self.assertTrue(any("CREATE TABLE IF NOT EXISTS logs_ingestao" in sql for sql in sqls))
-        self.assertTrue(any("idx_logs_ingestao_fonte_inicio" in sql for sql in sqls))
-        self.assertTrue(any("idx_logs_ingestao_etapa_status" in sql for sql in sqls))
-        put_log_conn.assert_called_once_with(conn)
+        get_log_engine.assert_called_once_with()
+        self.assertEqual(len(engine.connection.executions), 1)
+        self.assertEqual(str(engine.connection.executions[0]), "SELECT 1")
+        self.assertTrue(log_database._log_schema_initialized)
 
-    def test_registrar_log_ingestao_insere_volume_falhas_e_metadados(self) -> None:
-        conn = FakeConn()
+    @patch("app.core.log_database.orm.dispose_log_engine")
+    def test_close_log_pool_descarta_engine_e_reseta_estado(self, dispose_log_engine) -> None:
         log_database._log_schema_initialized = True
+
+        log_database.close_log_pool()
+
+        dispose_log_engine.assert_called_once_with()
+        self.assertFalse(log_database._log_schema_initialized)
+
+    def test_registrar_log_ingestao_persiste_modelo_orm_com_metadados(self) -> None:
+        session = MagicMock()
         inicio = datetime(2026, 8, 27, 10, 0, tzinfo=timezone.utc)
         termino = datetime(2026, 8, 27, 10, 5, tzinfo=timezone.utc)
+        log_database._log_schema_initialized = True
 
-        with (
-            patch("app.core.log_database.get_log_conn", return_value=conn),
-            patch("app.core.log_database.put_log_conn"),
-        ):
+        with patch("app.core.log_database.orm.log_session", return_value=fake_log_session(session)):
             log_database.registrar_log_ingestao(
                 fonte="TCE-CE",
                 etapa="buscar_contratos",
@@ -97,18 +102,46 @@ class LogDatabaseTest(unittest.TestCase):
                 erro="timeout",
             )
 
-        sql, params = conn.cursor_obj.executions[0]
-        self.assertIn("INSERT INTO logs_ingestao", sql)
-        self.assertIsNotNone(params)
-        assert params is not None
-        self.assertEqual(params[0], "TCE-CE")
-        self.assertEqual(params[1], "buscar_contratos")
-        self.assertEqual(params[2], "falha")
-        self.assertEqual(params[5], 7)
-        self.assertEqual(params[6], 1)
-        self.assertEqual(json.loads(str(params[7])), {"codigo_municipio": "010"})
-        self.assertEqual(json.loads(str(params[8])), {"contratos": 7})
-        self.assertEqual(params[9], "timeout")
+        session.add.assert_called_once()
+        registro = session.add.call_args.args[0]
+        self.assertIsInstance(registro, LogIngestao)
+        self.assertEqual(registro.fonte, "TCE-CE")
+        self.assertEqual(registro.etapa, "buscar_contratos")
+        self.assertEqual(registro.status, "falha")
+        self.assertEqual(registro.data_inicio, inicio)
+        self.assertEqual(registro.data_termino, termino)
+        self.assertEqual(registro.registros_processados, 7)
+        self.assertEqual(registro.falhas_ocorridas, 1)
+        self.assertEqual(registro.parametros, {"codigo_municipio": "010"})
+        self.assertEqual(registro.totais, {"contratos": 7})
+        self.assertEqual(registro.erro, "timeout")
+
+    def test_registrar_log_ingestao_normaliza_datas_naive_contadores_e_json(self) -> None:
+        session = MagicMock()
+        inicio = datetime(2026, 8, 27, 10, 0)
+        termino = datetime(2026, 8, 27, 8, 5, tzinfo=timezone(timedelta(hours=-3)))
+        log_database._log_schema_initialized = True
+
+        with patch("app.core.log_database.orm.log_session", return_value=fake_log_session(session)):
+            log_database.registrar_log_ingestao(
+                fonte="TCE-CE",
+                etapa="buscar_contratos",
+                data_inicio=inicio,
+                data_termino=termino,
+                registros_processados=-7,
+                falhas_ocorridas=-1,
+                parametros={"quando": inicio},
+                totais=None,
+            )
+
+        registro = session.add.call_args.args[0]
+        self.assertEqual(registro.status, "sucesso")
+        self.assertEqual(registro.data_inicio, datetime(2026, 8, 27, 10, 0, tzinfo=timezone.utc))
+        self.assertEqual(registro.data_termino, datetime(2026, 8, 27, 11, 5, tzinfo=timezone.utc))
+        self.assertEqual(registro.registros_processados, 0)
+        self.assertEqual(registro.falhas_ocorridas, 0)
+        self.assertEqual(registro.parametros, {"quando": "2026-08-27 10:00:00"})
+        self.assertEqual(registro.totais, {})
 
 
 if __name__ == "__main__":
