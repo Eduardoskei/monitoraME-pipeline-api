@@ -72,7 +72,24 @@ class ConfigTest(unittest.TestCase):
         )
         self.assertEqual(config.TCE_CE_BASE_URL, "https://api-dados-abertos.tce.ce.gov.br/sim")
         self.assertEqual(config.MODALIDADE_ID_PADRAO, 6)
+        self.assertEqual(config.PNCP_MODALIDADES_INCREMENTAIS, (6,))
+        self.assertEqual(config.PNCP_UFS_INCREMENTAIS, ("CE",))
+        self.assertEqual(config.PNCP_JANELA_INICIAL_HORAS, 6)
         self.assertEqual(len(config.NATUREZAS_DESPESA_CONSIDERADAS), 7)
+
+    def test_variaveis_incrementais_pncp_sao_configuraveis(self) -> None:
+        env = {
+            **REQUIRED_ENV,
+            "PNCP_MODALIDADES_INCREMENTAIS": "6, 8, 6",
+            "PNCP_UFS_INCREMENTAIS": "ce, pe",
+            "PNCP_JANELA_INICIAL_HORAS": "24",
+        }
+
+        config = self._reload_config_with_env(env)
+
+        self.assertEqual(config.PNCP_MODALIDADES_INCREMENTAIS, (6, 8))
+        self.assertEqual(config.PNCP_UFS_INCREMENTAIS, ("CE", "PE"))
+        self.assertEqual(config.PNCP_JANELA_INICIAL_HORAS, 24)
 
 
 if __name__ == "__main__":

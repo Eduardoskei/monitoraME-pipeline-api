@@ -1,7 +1,7 @@
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import analisys
+from app.pipeline import analisys, pncp_incremental
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion.pncp import PncpIndisponivelError
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -87,6 +87,24 @@ def pncp_contratacoes(
             enriquecer_fornecedores=enriquecer_fornecedores,
             limite=limite,
         )
+    except Exception as error:
+        raise _erro_pipeline(error) from error
+
+
+@router.post(
+    "/pncp/ingestao-incremental",
+    summary="Executa a ingestao incremental PNCP",
+    description="Coleta e persiste dados PNCP novos ou atualizados desde o ultimo checkpoint valido.",
+    response_description="Resumo de controle da execucao incremental PNCP.",
+)
+def pncp_ingestao_incremental(
+    max_paginas: Annotated[
+        int | None,
+        Query(description="Quantidade maxima de paginas consultadas por chamada PNCP.", ge=1),
+    ] = None,
+) -> dict[str, object]:
+    try:
+        return pncp_incremental.executar_ingestao_incremental_pncp(max_paginas=max_paginas)
     except Exception as error:
         raise _erro_pipeline(error) from error
 

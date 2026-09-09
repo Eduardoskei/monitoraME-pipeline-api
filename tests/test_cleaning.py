@@ -208,6 +208,54 @@ class LimparPncpContratacoesTest(unittest.TestCase):
         self.assertEqual(tabelas["contratos"]["ni_fornecedor"].iloc[0], "01234567000199")
 
 
+class LimparPncpPcaTest(unittest.TestCase):
+    def test_limpa_planos_e_itens_pca_preservando_chaves_oficiais(self) -> None:
+        planos = pncp_cleaning.limpar_pca_planos(
+            [
+                {
+                    "numeroControlePNCP": "12345678000199-2026-000001",
+                    "cnpj": "12.345.678/0001-99",
+                    "anoPca": 2026,
+                    "sequencialPca": 1,
+                    "uf": "CE",
+                    "valorTotal": "1.000,50",
+                    "dataAtualizacao": "2026-09-09",
+                },
+                {
+                    "numeroControlePNCP": "12345678000199-2026-000001",
+                    "cnpj": "12.345.678/0001-99",
+                    "anoPca": 2026,
+                    "sequencialPca": 1,
+                    "uf": "CE",
+                    "valorTotal": "1.000,50",
+                    "dataAtualizacao": "2026-09-09",
+                },
+            ]
+        )
+        itens = pncp_cleaning.limpar_pca_itens(
+            [
+                {
+                    "numeroControlePNCP": "12345678000199-2026-000001",
+                    "cnpj": "12.345.678/0001-99",
+                    "anoPca": 2026,
+                    "sequencialPca": 1,
+                    "numeroItem": 7,
+                    "categoriaItemPcaNome": "Material de consumo",
+                    "valorTotal": "250,10",
+                }
+            ]
+        )
+
+        self.assertEqual(len(planos), 1)
+        self.assertEqual(planos.iloc[0]["cnpj"], "12345678000199")
+        self.assertEqual(planos.iloc[0]["valor_total"], 1000.5)
+        self.assertEqual(planos.iloc[0]["data_atualizacao"], "2026-09-09")
+        self.assertEqual(len(itens), 1)
+        self.assertEqual(itens.iloc[0]["numero_item"], 7)
+        self.assertEqual(itens.iloc[0]["categoria_item_pca_nome"], "Material de consumo")
+        self.assertEqual(itens.iloc[0]["valor_total"], 250.1)
+
+
 class LimparTceTest(unittest.TestCase):
     """
     Usa app.pipeline.ingestion.tce de verdade (só a chamada HTTP é mockada).

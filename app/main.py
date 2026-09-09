@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.core import database, log_database
 from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
+    pncp_ingestao_incremental,
     pncp_contratacoes,
     tce_contratos,
     tce_kpi_me_por_mes,
@@ -16,6 +17,7 @@ __all__ = [
     "app",
     "health",
     "lifespan",
+    "pncp_ingestao_incremental",
     "pncp_contratacoes",
     "tce_contratos",
     "tce_kpi_me_por_mes",

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+import json
 import os
 from typing import Any
 from app.core.config import DATABASE_URL
@@ -35,6 +37,16 @@ def _ensure_driver() -> None:
         raise RuntimeError(
             "psycopg2-binary nao esta instalado. Instale as dependencias antes de usar o Postgres."
         ) from _PSYCOPG2_IMPORT_ERROR
+
+
+def _jsonb(valor: dict[str, Any] | None) -> str:
+    return json.dumps(valor or {}, ensure_ascii=False, default=str)
+
+
+def _datetime_utc(valor: datetime) -> datetime:
+    if valor.tzinfo is None:
+        return valor.replace(tzinfo=timezone.utc)
+    return valor.astimezone(timezone.utc)
 
 
 def _extrair_uf_municipio(municipio: dict[str, Any]) -> str | None:
@@ -184,6 +196,252 @@ def init_db() -> None:
                     cnpj TEXT PRIMARY KEY,
                     razao_social TEXT,
                     porte TEXT NOT NULL CHECK (porte = 'ME')
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_ingestion_state (
+                    escopo TEXT PRIMARY KEY,
+                    ultima_execucao_sucesso TIMESTAMPTZ NOT NULL,
+                    parametros JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_ingestion_runs (
+                    id BIGSERIAL PRIMARY KEY,
+                    escopo TEXT NOT NULL,
+                    status_execucao TEXT NOT NULL CHECK (status_execucao IN ('sucesso', 'falha')),
+                    executado_em TIMESTAMPTZ NOT NULL,
+                    janela_inicio TIMESTAMPTZ NOT NULL,
+                    janela_fim TIMESTAMPTZ NOT NULL,
+                    quantidade_lida INTEGER NOT NULL CHECK (quantidade_lida >= 0),
+                    quantidade_inserida INTEGER NOT NULL CHECK (quantidade_inserida >= 0),
+                    quantidade_atualizada INTEGER NOT NULL CHECK (quantidade_atualizada >= 0),
+                    quantidade_com_erro INTEGER NOT NULL CHECK (quantidade_com_erro >= 0),
+                    parametros JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    totais JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    erro TEXT,
+                    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_ingestion_runs_escopo_execucao
+                ON pncp_ingestion_runs (escopo, executado_em DESC);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_contratacoes (
+                    numero_controle_pncp TEXT PRIMARY KEY,
+                    cnpj_orgao TEXT,
+                    ano_compra INTEGER,
+                    sequencial_compra INTEGER,
+                    modalidade_id INTEGER,
+                    modalidade_nome TEXT,
+                    objeto_compra TEXT,
+                    natureza_despesa_monitorada TEXT,
+                    data_publicacao_pncp TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    data_atualizacao_global TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_contratacoes_datas
+                ON pncp_contratacoes (data_publicacao_pncp, data_atualizacao, data_atualizacao_global);
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_contratacoes_modalidade_uf
+                ON pncp_contratacoes (modalidade_id, cnpj_orgao);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_itens (
+                    item_id TEXT PRIMARY KEY,
+                    numero_controle_pncp TEXT NOT NULL REFERENCES pncp_contratacoes(numero_controle_pncp) ON DELETE CASCADE,
+                    numero_item INTEGER,
+                    descricao TEXT,
+                    material_ou_servico_nome TEXT,
+                    item_categoria_id INTEGER,
+                    item_categoria_nome TEXT,
+                    categoria_item_catalogo_id INTEGER,
+                    categoria_item_catalogo_nome TEXT,
+                    classificacao_superior_codigo TEXT,
+                    classificacao_superior_nome TEXT,
+                    ncm_nbs_codigo TEXT,
+                    ncm_nbs_descricao TEXT,
+                    valor_total NUMERIC,
+                    natureza_despesa_monitorada TEXT,
+                    data_inclusao TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_itens_contratacao
+                ON pncp_itens (numero_controle_pncp);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_resultados (
+                    resultado_id TEXT PRIMARY KEY,
+                    numero_controle_pncp TEXT NOT NULL REFERENCES pncp_contratacoes(numero_controle_pncp) ON DELETE CASCADE,
+                    numero_item INTEGER,
+                    ni_fornecedor TEXT,
+                    nome_razao_social_fornecedor TEXT,
+                    porte_fornecedor_id INTEGER,
+                    porte_fornecedor_nome TEXT,
+                    porte_fornecedor_padronizado TEXT,
+                    valor_total_homologado NUMERIC,
+                    data_resultado TIMESTAMPTZ,
+                    data_cancelamento TIMESTAMPTZ,
+                    data_inclusao TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_resultados_fornecedor
+                ON pncp_resultados (ni_fornecedor);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_contratos (
+                    contrato_id TEXT PRIMARY KEY,
+                    numero_controle_pncp TEXT NOT NULL REFERENCES pncp_contratacoes(numero_controle_pncp) ON DELETE CASCADE,
+                    ano_contrato INTEGER,
+                    sequencial_contrato INTEGER,
+                    numero_contrato_empenho TEXT,
+                    ni_fornecedor TEXT,
+                    nome_razao_social_fornecedor TEXT,
+                    valor_global NUMERIC,
+                    data_assinatura TIMESTAMPTZ,
+                    data_vigencia_inicio TIMESTAMPTZ,
+                    data_vigencia_fim TIMESTAMPTZ,
+                    data_publicacao_pncp TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_contratos_fornecedor
+                ON pncp_contratos (ni_fornecedor);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_pca_planos (
+                    pca_id TEXT PRIMARY KEY,
+                    numero_controle_pncp TEXT,
+                    cnpj_orgao TEXT,
+                    ano_pca INTEGER,
+                    sequencial_pca INTEGER,
+                    codigo_unidade TEXT,
+                    nome_unidade TEXT,
+                    municipio TEXT,
+                    uf TEXT,
+                    natureza_despesa_monitorada TEXT,
+                    data_publicacao_pncp TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    data_atualizacao_global TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_pca_planos_orgao_ano
+                ON pncp_pca_planos (cnpj_orgao, ano_pca);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_pca_itens (
+                    pca_item_id TEXT PRIMARY KEY,
+                    pca_id TEXT NOT NULL REFERENCES pncp_pca_planos(pca_id) ON DELETE CASCADE,
+                    numero_controle_pncp TEXT,
+                    cnpj_orgao TEXT,
+                    ano_pca INTEGER,
+                    sequencial_pca INTEGER,
+                    numero_item INTEGER,
+                    categoria_item_pca_id INTEGER,
+                    categoria_item_pca_nome TEXT,
+                    classificacao_superior_codigo TEXT,
+                    classificacao_superior_nome TEXT,
+                    pdm_codigo TEXT,
+                    pdm_descricao TEXT,
+                    codigo_item TEXT,
+                    descricao TEXT,
+                    unidade_fornecimento TEXT,
+                    quantidade NUMERIC,
+                    valor_unitario NUMERIC,
+                    valor_total NUMERIC,
+                    valor_orcamento_exercicio NUMERIC,
+                    natureza_despesa_monitorada TEXT,
+                    data_desejada TIMESTAMPTZ,
+                    data_publicacao_pncp TIMESTAMPTZ,
+                    data_inclusao TIMESTAMPTZ,
+                    data_atualizacao TIMESTAMPTZ,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_pncp_pca_itens_pca
+                ON pncp_pca_itens (pca_id);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pncp_fornecedores (
+                    cnpj TEXT PRIMARY KEY,
+                    razao_social TEXT,
+                    porte TEXT,
+                    porte_padronizado TEXT,
+                    municipio_sede TEXT,
+                    uf_sede TEXT,
+                    cnae_principal_codigo TEXT,
+                    cnae_principal_descricao TEXT,
+                    elegivel_me BOOLEAN,
+                    cnpj_valido BOOLEAN,
+                    opencnpj_status TEXT,
+                    optante_simples_nacional BOOLEAN,
+                    optante_mei BOOLEAN,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    inserido_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 """
             )
@@ -357,5 +615,203 @@ def localizar_fornecedor_me(cnpj: str) -> dict[str, Any] | None:
                 (cnpj,),
             )
             return _row_to_fornecedor_me(cur.fetchone())
+    finally:
+        put_conn(conn)
+
+
+def buscar_checkpoint_pncp(escopo: str) -> datetime | None:
+    init_db()
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ultima_execucao_sucesso
+                FROM pncp_ingestion_state
+                WHERE escopo = %s;
+                """,
+                (escopo,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        put_conn(conn)
+
+
+def salvar_checkpoint_pncp(
+    *,
+    escopo: str,
+    ultima_execucao_sucesso: datetime,
+    parametros: dict[str, Any] | None = None,
+) -> None:
+    init_db()
+    conn = get_conn()
+    try:
+        with conn, conn.cursor() as cur:
+            _execute_salvar_checkpoint_pncp(
+                cur,
+                escopo=escopo,
+                ultima_execucao_sucesso=ultima_execucao_sucesso,
+                parametros=parametros,
+            )
+    finally:
+        put_conn(conn)
+
+
+def _execute_salvar_checkpoint_pncp(
+    cur: Any,
+    *,
+    escopo: str,
+    ultima_execucao_sucesso: datetime,
+    parametros: dict[str, Any] | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO pncp_ingestion_state (
+            escopo,
+            ultima_execucao_sucesso,
+            parametros,
+            atualizado_em
+        )
+        VALUES (%s, %s, %s::jsonb, NOW())
+        ON CONFLICT (escopo)
+        DO UPDATE SET
+            ultima_execucao_sucesso = EXCLUDED.ultima_execucao_sucesso,
+            parametros = EXCLUDED.parametros,
+            atualizado_em = NOW();
+        """,
+        (
+            escopo,
+            _datetime_utc(ultima_execucao_sucesso),
+            _jsonb(parametros),
+        ),
+    )
+
+
+def registrar_execucao_pncp(
+    *,
+    escopo: str,
+    status_execucao: str,
+    executado_em: datetime,
+    janela_inicio: datetime,
+    janela_fim: datetime,
+    quantidade_lida: int,
+    quantidade_inserida: int,
+    quantidade_atualizada: int,
+    quantidade_com_erro: int,
+    parametros: dict[str, Any] | None = None,
+    totais: dict[str, Any] | None = None,
+    erro: str | None = None,
+) -> None:
+    init_db()
+    conn = get_conn()
+    try:
+        with conn, conn.cursor() as cur:
+            _execute_registrar_execucao_pncp(
+                cur,
+                escopo=escopo,
+                status_execucao=status_execucao,
+                executado_em=executado_em,
+                janela_inicio=janela_inicio,
+                janela_fim=janela_fim,
+                quantidade_lida=quantidade_lida,
+                quantidade_inserida=quantidade_inserida,
+                quantidade_atualizada=quantidade_atualizada,
+                quantidade_com_erro=quantidade_com_erro,
+                parametros=parametros,
+                totais=totais,
+                erro=erro,
+            )
+    finally:
+        put_conn(conn)
+
+
+def _execute_registrar_execucao_pncp(
+    cur: Any,
+    *,
+    escopo: str,
+    status_execucao: str,
+    executado_em: datetime,
+    janela_inicio: datetime,
+    janela_fim: datetime,
+    quantidade_lida: int,
+    quantidade_inserida: int,
+    quantidade_atualizada: int,
+    quantidade_com_erro: int,
+    parametros: dict[str, Any] | None = None,
+    totais: dict[str, Any] | None = None,
+    erro: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO pncp_ingestion_runs (
+            escopo,
+            status_execucao,
+            executado_em,
+            janela_inicio,
+            janela_fim,
+            quantidade_lida,
+            quantidade_inserida,
+            quantidade_atualizada,
+            quantidade_com_erro,
+            parametros,
+            totais,
+            erro
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s);
+        """,
+        (
+            escopo,
+            status_execucao,
+            _datetime_utc(executado_em),
+            _datetime_utc(janela_inicio),
+            _datetime_utc(janela_fim),
+            max(0, int(quantidade_lida)),
+            max(0, int(quantidade_inserida)),
+            max(0, int(quantidade_atualizada)),
+            max(0, int(quantidade_com_erro)),
+            _jsonb(parametros),
+            _jsonb(totais),
+            erro,
+        ),
+    )
+
+
+def registrar_sucesso_e_checkpoint_pncp(
+    *,
+    escopo: str,
+    executado_em: datetime,
+    janela_inicio: datetime,
+    janela_fim: datetime,
+    quantidade_lida: int,
+    quantidade_inserida: int,
+    quantidade_atualizada: int,
+    parametros: dict[str, Any] | None = None,
+    totais: dict[str, Any] | None = None,
+) -> None:
+    init_db()
+    conn = get_conn()
+    try:
+        with conn, conn.cursor() as cur:
+            _execute_registrar_execucao_pncp(
+                cur,
+                escopo=escopo,
+                status_execucao="sucesso",
+                executado_em=executado_em,
+                janela_inicio=janela_inicio,
+                janela_fim=janela_fim,
+                quantidade_lida=quantidade_lida,
+                quantidade_inserida=quantidade_inserida,
+                quantidade_atualizada=quantidade_atualizada,
+                quantidade_com_erro=0,
+                parametros=parametros,
+                totais=totais,
+            )
+            _execute_salvar_checkpoint_pncp(
+                cur,
+                escopo=escopo,
+                ultima_execucao_sucesso=janela_fim,
+                parametros=parametros,
+            )
     finally:
         put_conn(conn)
