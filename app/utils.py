@@ -7,7 +7,7 @@ import pandas as pd
 
 
 VALORES_VAZIOS = (None, "")
-MARCADORES_BANCO_INDISPONIVEL = ("psycopg2-binary",)
+MARCADORES_BANCO_INDISPONIVEL = ("psycopg",)
 
 
 def somente_digitos(valor: Any) -> str:

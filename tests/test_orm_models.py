@@ -25,6 +25,10 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 from app.core import log_models, models, orm
 
 
+def _url_psycopg(url: str) -> str:
+    return url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+
 class OrmMetadataTest(unittest.TestCase):
     def test_main_metadata_registra_tabelas_do_banco_principal(self) -> None:
         esperado = {
@@ -87,7 +91,7 @@ class OrmEngineFactoryTest(unittest.TestCase):
         self.assertIs(segundo, engine)
         create_engine.assert_called_once()
         args, kwargs = create_engine.call_args
-        self.assertEqual(args[0], os.environ["DATABASE_URL"])
+        self.assertEqual(args[0], _url_psycopg(os.environ["DATABASE_URL"]))
         self.assertEqual(kwargs["pool_size"], 10)
         self.assertEqual(kwargs["max_overflow"], 0)
         self.assertEqual(kwargs["connect_args"], {"sslmode": "require"})
@@ -100,8 +104,25 @@ class OrmEngineFactoryTest(unittest.TestCase):
         self.assertIs(orm.get_log_engine(), engine)
 
         args, kwargs = create_engine.call_args
-        self.assertEqual(args[0], os.environ["LOG_DATABASE_URL"])
+        self.assertEqual(args[0], _url_psycopg(os.environ["LOG_DATABASE_URL"]))
         self.assertEqual(kwargs["connect_args"], {"sslmode": "require"})
+
+    def test_urls_explicitas_com_driver_sao_preservadas(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "DATABASE_URL": "postgresql+psycopg://postgres:postgres@localhost:5432/main",
+                "LOG_DATABASE_URL": "postgresql+psycopg://postgres:postgres@localhost:5432/logs",
+            },
+        ):
+            self.assertEqual(
+                orm.main_database_url(),
+                "postgresql+psycopg://postgres:postgres@localhost:5432/main",
+            )
+            self.assertEqual(
+                orm.log_database_url(),
+                "postgresql+psycopg://postgres:postgres@localhost:5432/logs",
+            )
 
     def test_main_session_context_manager_commita_e_fecha(self) -> None:
         session = MagicMock()

@@ -104,7 +104,7 @@ Dependências Python principais:
 - `pandas`
 - `plotly`
 - `requests`
-- `psycopg2-binary`
+- `psycopg[binary]>=3.3,<4`
 - `SQLAlchemy`
 - `alembic`
 - `pydantic`
@@ -179,6 +179,7 @@ alembic -n logs upgrade head
 ```
 
 Na fase atual de transição, o lifespan da API valida as conexões dos bancos ao subir. Novas alterações de schema devem ser feitas por migrations.
+As URLs `postgresql://...` sao normalizadas internamente para `postgresql+psycopg://...`, usando o driver `psycopg` v3 com SQLAlchemy.
 
 ### 4. Rode a API
 
@@ -220,10 +221,10 @@ Responsabilidades por módulo:
 - `app/main.py`: cria a aplicação FastAPI, registra rotas e valida/fecha conexões Postgres durante o lifespan.
 - `app/api/endpoints/`: define os endpoints HTTP e traduz erros de domínio em códigos HTTP.
 - `app/core/config.py`: carrega variáveis de ambiente obrigatórias via `python-dotenv`.
-- `app/core/database.py`: concentra o acesso ORM ao banco principal e mantém uma ponte temporária para a persistência PNCP ainda baseada em cursor.
+- `app/core/database.py`: concentra o acesso ORM ao banco principal.
 - `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
 - `app/pipeline/pncp_incremental.py`: orquestra a carga incremental PNCP acionada pela rota da API.
-- `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente.
+- `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente via SQLAlchemy.
 - `app/utils.py`: concentra funções utilitárias compartilhadas, incluindo o motor genérico de normalização de estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
 - `app/pipeline/cleaners/pncp.py`, `tce.py`, `ibge.py` e `opencnpj.py`: aplicam as regras de limpeza específicas de cada API.
 - `app/pipeline/merge.py`: cruza tabelas limpas entre fontes e aplica enriquecimentos.
