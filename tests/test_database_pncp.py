@@ -43,13 +43,9 @@ class FakeConnection:
 class FakeEngine:
     def __init__(self) -> None:
         self.connection = FakeConnection()
-        self.raw_connection_obj = MagicMock()
 
     def connect(self) -> FakeConnection:
         return self.connection
-
-    def raw_connection(self):
-        return self.raw_connection_obj
 
 
 @contextmanager
@@ -85,30 +81,6 @@ class DatabasePncpTest(unittest.TestCase):
 
         dispose_main_engine.assert_called_once_with()
         self.assertFalse(database._schema_initialized)
-
-    def test_get_conn_retorna_adaptador_de_raw_connection_temporario(self) -> None:
-        engine = FakeEngine()
-
-        with patch("app.core.database.orm.get_main_engine", return_value=engine):
-            conn = database.get_conn()
-            with conn as adapter:
-                self.assertIs(adapter, conn)
-            database.put_conn(conn)
-
-        engine.raw_connection_obj.commit.assert_called_once_with()
-        engine.raw_connection_obj.rollback.assert_not_called()
-        engine.raw_connection_obj.close.assert_called_once_with()
-
-    def test_raw_connection_adapter_faz_rollback_em_erro(self) -> None:
-        raw_connection = MagicMock()
-        conn = database.RawConnectionAdapter(raw_connection)
-
-        with self.assertRaisesRegex(RuntimeError, "falhou"):
-            with conn:
-                raise RuntimeError("falhou")
-
-        raw_connection.commit.assert_not_called()
-        raw_connection.rollback.assert_called_once_with()
 
     def test_salvar_municipios_ibge_usa_modelos_orm_e_ignora_invalidos(self) -> None:
         session = MagicMock()

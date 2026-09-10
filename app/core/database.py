@@ -20,35 +20,6 @@ from app.utils import primeiro_valor as _primeiro_valor
 _schema_initialized = False
 
 
-class RawConnectionAdapter:
-    def __init__(self, raw_connection: Any) -> None:
-        self._raw_connection = raw_connection
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._raw_connection, name)
-
-    def __enter__(self) -> "RawConnectionAdapter":
-        return self
-
-    def __exit__(self, exc_type: object, _exc: object, _tb: object) -> None:
-        if exc_type is None:
-            self.commit()
-        else:
-            self.rollback()
-
-    def cursor(self) -> Any:
-        return self._raw_connection.cursor()
-
-    def commit(self) -> None:
-        self._raw_connection.commit()
-
-    def rollback(self) -> None:
-        self._raw_connection.rollback()
-
-    def close(self) -> None:
-        self._raw_connection.close()
-
-
 def _jsonb(valor: dict[str, Any] | None) -> str:
     return json.dumps(valor or {}, ensure_ascii=False, default=str)
 
@@ -125,40 +96,6 @@ def _fornecedor_me_to_dict(fornecedor: FornecedorMe | None) -> dict[str, Any] | 
         "razao_social": fornecedor.razao_social,
         "porte": fornecedor.porte,
     }
-
-
-def _row_to_municipio(row: tuple[Any, Any, Any] | None) -> dict[str, Any] | None:
-    if row is None:
-        return None
-
-    codigo_municipio, nome, uf = row
-    return {
-        "id": codigo_municipio,
-        "codigo_municipio": codigo_municipio,
-        "nome": nome,
-        "uf": uf,
-    }
-
-
-def _row_to_fornecedor_me(row: tuple[Any, Any, Any] | None) -> dict[str, Any] | None:
-    if row is None:
-        return None
-
-    cnpj, razao_social, porte = row
-    return {
-        "cnpj": cnpj,
-        "razao_social": razao_social,
-        "porte": porte,
-    }
-
-
-def get_conn() -> RawConnectionAdapter:
-    return RawConnectionAdapter(orm.get_main_engine().raw_connection())
-
-
-def put_conn(conn: Any) -> None:
-    if conn is not None:
-        conn.close()
 
 
 def close_pool() -> None:
@@ -400,16 +337,13 @@ def registrar_sucesso_e_checkpoint_pncp(
 
 
 __all__ = [
-    "RawConnectionAdapter",
     "buscar_checkpoint_pncp",
     "close_pool",
-    "get_conn",
     "init_db",
     "listar_municipios_ibge",
     "localizar_fornecedor_me",
     "localizar_municipio_ibge",
     "localizar_municipio_por_nome_ibge",
-    "put_conn",
     "registrar_execucao_pncp",
     "registrar_sucesso_e_checkpoint_pncp",
     "salvar_checkpoint_pncp",

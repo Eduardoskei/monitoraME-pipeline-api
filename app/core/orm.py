@@ -29,18 +29,24 @@ _main_session_factory: sessionmaker[Session] | None = None
 _log_session_factory: sessionmaker[Session] | None = None
 
 
+def _psycopg_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return database_url
+
+
 def main_database_url() -> str:
     database_url = os.getenv("DATABASE_URL") or DATABASE_URL
     if not database_url.strip():
         raise RuntimeError("DATABASE_URL nao esta definida")
-    return database_url.strip()
+    return _psycopg_database_url(database_url.strip())
 
 
 def log_database_url() -> str:
     database_url = os.getenv("LOG_DATABASE_URL") or LOG_DATABASE_URL
     if not database_url.strip():
         raise RuntimeError("LOG_DATABASE_URL nao esta definida")
-    return database_url.strip()
+    return _psycopg_database_url(database_url.strip())
 
 
 def main_connect_args() -> dict[str, str]:
