@@ -400,6 +400,14 @@ def _fake_response(payload, status_code: int = 200) -> MagicMock:
     resposta.raise_for_status.return_value = None
     return resposta
 
+
+UFS_BRASIL = (
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
+    "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI",
+    "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+)
+
+
 class ClassificarOrigemGeograficaTest(unittest.TestCase):
     def test_caso_1_mesmo_municipio(self) -> None:
         resultado = merge.classificar_origem_geografica("Fortaleza", "CE", "Fortaleza")
@@ -413,7 +421,7 @@ class ClassificarOrigemGeograficaTest(unittest.TestCase):
         # Cobre TODOS os estados do Brasil, exceto o CE (26 UFs) — garante
         # que a classificacao escala para qualquer estado, nao so os
         # exemplos mais comuns (SP, RJ etc.).
-        for uf in merge.UFS_BRASIL:
+        for uf in UFS_BRASIL:
             if uf == "CE":
                 continue
             with self.subTest(uf=uf):
@@ -429,7 +437,7 @@ class BuscarMunicipiosUfTest(unittest.TestCase):
             {"nome": "Juazeiro do Norte"},
             {"nome": "Sobral"},  # duplicata proposital
         ]
-        with patch("app.pipeline.merge.requests.get") as mock_get:
+        with patch("app.pipeline.enrichment.municipios.requests.get") as mock_get:
             mock_get.return_value = _fake_response(payload)
             resultado = merge.buscar_municipios_uf("CE")
 
@@ -440,7 +448,7 @@ class BuscarMunicipiosUfTest(unittest.TestCase):
         )
 
     def test_uf_minuscula_e_normalizada_na_url(self) -> None:
-        with patch("app.pipeline.merge.requests.get") as mock_get:
+        with patch("app.pipeline.enrichment.municipios.requests.get") as mock_get:
             mock_get.return_value = _fake_response([{"nome": "São Paulo"}])
             merge.buscar_municipios_uf("sp")
 

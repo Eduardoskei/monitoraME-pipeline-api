@@ -6,6 +6,7 @@ from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
+from app.pipeline.enrichment.fornecedores import extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
 
 
@@ -133,7 +134,7 @@ def montar_base_pncp(
     if enriquecer_fornecedores:
         contratos = tabelas.get("contratos")
         serie_cnpj = contratos["ni_fornecedor"] if contratos is not None and "ni_fornecedor" in contratos else None
-        cnpjs = merge.extrair_cnpjs_distintos(serie_cnpj, _contratos_pncp_completos(registros))
+        cnpjs = extrair_cnpjs_distintos(serie_cnpj, _contratos_pncp_completos(registros))
         fornecedores_df = _coletar_fornecedores(cnpjs, throttle_fornecedores)
 
     tabelas = merge.montar_base_pncp(
@@ -195,7 +196,7 @@ def montar_base_tce_contratos(
             if "numero_documento_negociante" in df_contratados.columns
             else None
         )
-        cnpjs = merge.extrair_cnpjs_distintos(serie_cnpj)
+        cnpjs = extrair_cnpjs_distintos(serie_cnpj)
         fornecedores_df = _coletar_fornecedores(cnpjs, throttle_fornecedores)
 
     base = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)

@@ -210,7 +210,7 @@ def coletar_fornecedores_em_lote(
     APIs publicas. Duplicatas na lista de entrada sao ignoradas — cada CNPJ
     e consultado uma unica vez, mesmo que apareca em varios contratos.
 
-    Use `app.pipeline.merge.extrair_cnpjs_distintos` para montar `cnpjs` a
+    Use `app.pipeline.enrichment.fornecedores.extrair_cnpjs_distintos` para montar `cnpjs` a
     partir das tabelas ja limpas de contratos/contratados.
     """
     vistos: set[str] = set()
