@@ -14,9 +14,9 @@ from app.core.config import (
     PNCP_MODALIDADES_INCREMENTAIS,
     PNCP_UFS_INCREMENTAIS,
 )
-from app.pipeline import merge
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
+from app.pipeline.enrichment.fornecedores import extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, pncp
 from app.pipeline.persistence import pncp as pncp_persistence
 from app.utils import normalizar_texto, primeiro_valor
@@ -521,7 +521,7 @@ def _coletar_fornecedores(tabelas: dict[str, pd.DataFrame]) -> pd.DataFrame:
         if tabela is not None and not tabela.empty and "ni_fornecedor" in tabela.columns:
             series.append(tabela["ni_fornecedor"])
 
-    cnpjs = merge.extrair_cnpjs_distintos(*series)
+    cnpjs = extrair_cnpjs_distintos(*series)
     if not cnpjs:
         return pd.DataFrame()
 
