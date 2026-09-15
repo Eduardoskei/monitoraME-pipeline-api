@@ -1,7 +1,7 @@
 from typing import Any
 import pandas as pd
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import kpis, merge
+from app.pipeline import kpis, merge, pncp_incremental
 from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
@@ -124,7 +124,9 @@ def montar_base_pncp(
         else publicacoes
     )
 
-    tabelas = pncp_cleaning.limpar_contratacoes(registros)
+    tabelas_limpas = pncp_cleaning.limpar_contratacoes(registros)
+    tabelas_filtradas = pncp_incremental.filtrar_contratacoes_por_codigo_despesa(tabelas_limpas)
+    tabelas = {nome: tabelas_filtradas[nome] for nome in tabelas_limpas}
 
     municipios_df = None
     if enriquecer_municipios:

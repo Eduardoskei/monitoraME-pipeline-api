@@ -6,7 +6,6 @@ from app.core import database
 from app.utils import (
     banco_indisponivel as _ignorar_banco_indisponivel,
     normalizar_texto as _normalizar_texto,
-    primeiro_valor as _primeiro_valor,
     somente_digitos,
 )
 
@@ -24,31 +23,9 @@ def normalizar_porte_me(valor: Any) -> str | None:
     return None
 
 
-_CAMINHOS_PORTE = (
-    ("porte", "descricao"),
-    ("porte",),
-    ("descricao_porte",),
-    ("porte_empresa",),
-    ("empresa", "porte", "descricao"),
-    ("empresa", "porte"),
-    ("estabelecimento", "porte", "descricao"),
-    ("estabelecimento", "porte"),
-)
-
-_CAMINHOS_RAZAO_SOCIAL = (
-    ("razao_social",),
-    ("razaoSocial",),
-    ("nome",),
-    ("nome_empresarial",),
-    ("empresa", "razao_social"),
-    ("empresa", "razaoSocial"),
-    ("estabelecimento", "nome_empresarial"),
-)
-
-
 def extrair_porte_cadastral(payload: dict[str, Any]) -> str | None:
     """Extrai o porte informado pela fonte sem inferi-lo de Simples/MEI."""
-    valor = _primeiro_valor(payload, _CAMINHOS_PORTE)
+    valor = payload.get("porte_empresa")
     if isinstance(valor, dict) or valor in (None, ""):
         return None
     texto = str(valor).strip()
@@ -56,7 +33,7 @@ def extrair_porte_cadastral(payload: dict[str, Any]) -> str | None:
 
 
 def extrair_razao_social(payload: dict[str, Any]) -> str | None:
-    valor = _primeiro_valor(payload, _CAMINHOS_RAZAO_SOCIAL)
+    valor = payload.get("razao_social")
     if isinstance(valor, dict) or valor in (None, ""):
         return None
     texto = str(valor).strip()

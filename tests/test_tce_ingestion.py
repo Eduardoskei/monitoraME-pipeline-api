@@ -33,37 +33,56 @@ class TceIngestionTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             tce.normalizar_data_tce(20250107)
 
-    def test_filtrar_naturezas_despesa_descarta_registros_fora_da_lista(self) -> None:
+    def test_filtrar_naturezas_despesa_descarta_codigos_fora_da_lista(self) -> None:
         registros = [
-            {"id": 1, "natureza_despesa": "Material de consumo"},
-            {"id": 2, "natureza_despesa": "Diarias - civil"},
-            {"id": 3, "natureza_despesa": "Servicos de consultoria"},
+            {"id": 1, "codigo_elemento_despesa": "33903000"},
+            {"id": 2, "codigo_elemento_despesa": "14"},
+            {"id": 3, "codigo_elemento_despesa": "33903500"},
         ]
 
         filtrados = tce.filtrar_naturezas_despesa(registros)
 
         self.assertEqual([registro["id"] for registro in filtrados], [1, 3])
 
-    def test_filtrar_naturezas_despesa_normaliza_acentos_e_hifens(self) -> None:
+    def test_filtrar_naturezas_despesa_normaliza_codigo_com_classificacao_completa(self) -> None:
         registros = [
             {
                 "id": 1,
-                "descricao_natureza_despesa": "Outros serviços de terceiros-pessoa jurídica",
-            }
+                "codigo_elemento_despesa": "3.3.90.39",
+            },
+            {
+                "id": 2,
+                "codigo_elemento_despesa": "33903900",
+            },
         ]
 
         self.assertEqual(tce.filtrar_naturezas_despesa(registros), registros)
 
-    def test_filtrar_naturezas_preserva_registro_sem_o_campo(self) -> None:
+    def test_filtrar_naturezas_despesa_ignora_outros_campos_de_codigo(self) -> None:
+        registros = [{"id": 1, "DespesaCódigo": "33904000"}]
+
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), [])
+
+    def test_filtrar_naturezas_despesa_nao_usa_nome_para_classificar(self) -> None:
+        registros = [{"id": 1, "natureza_despesa": "Material de consumo 30"}]
+
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), [])
+
+    def test_filtrar_naturezas_descarta_registro_sem_codigo(self) -> None:
         registros = [{"numero_contrato": "2025000123"}]
 
-        self.assertEqual(tce.filtrar_naturezas_despesa(registros), registros)
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), [])
 
     @patch("app.pipeline.ingestion.tce.buscar_dados_tce")
     def test_listar_registros_usa_start_index(self, buscar_dados_tce) -> None:
         buscar_dados_tce.side_effect = [
-            {"elements": [{"numero_contrato": "1"}, {"numero_contrato": "2"}]},
-            {"elements": [{"numero_contrato": "3"}]},
+            {
+                "elements": [
+                    {"numero_contrato": "1", "codigo_elemento_despesa": "33903000"},
+                    {"numero_contrato": "2", "codigo_elemento_despesa": "33903000"},
+                ]
+            },
+            {"elements": [{"numero_contrato": "3", "codigo_elemento_despesa": "33903000"}]},
         ]
 
         tamanho_original = tce.TAMANHO_PAGINA
@@ -89,7 +108,12 @@ class TceIngestionTest(unittest.TestCase):
             start_index = int(params["$start_index"])
             total = 2250
             fim = min(start_index + tce.TAMANHO_PAGINA, total)
-            return {"elements": [{"numero_contrato": str(indice)} for indice in range(start_index, fim)]}
+            return {
+                "elements": [
+                    {"numero_contrato": str(indice), "codigo_elemento_despesa": "33903000"}
+                    for indice in range(start_index, fim)
+                ]
+            }
 
         buscar_dados_tce.side_effect = pagina
 
@@ -104,6 +128,22 @@ class TceIngestionTest(unittest.TestCase):
         self.assertTrue(all(params["$count"] == 1000 for params in params_chamadas))
         self.assertTrue(all(params["codigo_municipio"] == "138" for params in params_chamadas))
         self.assertEqual(sleep.call_count, 2)
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.buscar_dados_tce")
+    def test_buscar_municipios_nao_aplica_filtro_de_despesa(
+        self,
+        buscar_dados_tce,
+        registrar_log_ingestao,
+    ) -> None:
+        buscar_dados_tce.return_value = {
+            "elements": [{"codigo_municipio": "010", "nome_municipio": "Amontada"}]
+        }
+
+        registros = tce.buscar_municipios()
+
+        self.assertEqual(registros, [{"codigo_municipio": "010", "nome_municipio": "Amontada"}])
+        registrar_log_ingestao.assert_called_once()
 
     @patch("app.core.logging.log_database.registrar_log_ingestao")
     @patch("app.pipeline.ingestion.tce.listar_registros")

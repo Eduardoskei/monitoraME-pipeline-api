@@ -20,34 +20,69 @@ os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
-from app.core.config import NATUREZAS_DESPESA_CONSIDERADAS
+from app.core.config import CODIGOS_NATUREZAS_DESPESA_CONSIDERADAS
+from app.pipeline.naturezas_despesa import normalizar_codigo_natureza_despesa
 from app.pipeline.ingestion import tce
 
 
 class NaturezasDespesaTest(unittest.TestCase):
-    def test_todas_as_sete_naturezas_configuradas_sao_aceitas(self) -> None:
+    def test_normaliza_codigo_puro_e_classificacao_completa(self) -> None:
+        self.assertEqual(normalizar_codigo_natureza_despesa("30"), "30")
+        self.assertEqual(normalizar_codigo_natureza_despesa("3.3.90.39"), "39")
+        self.assertEqual(normalizar_codigo_natureza_despesa("3.3.90.39.00"), "39")
+        self.assertEqual(normalizar_codigo_natureza_despesa("33903900"), "39")
+
+    def test_normaliza_naturezas_completas_com_subelemento(self) -> None:
+        exemplos = {
+            "33903900": "39",
+            "44905100": "51",
+            "33903000": "30",
+            "44905200": "52",
+            "33903200": "32",
+            "33903500": "35",
+            "33904000": "40",
+        }
+
+        for codigo_completo, codigo_elemento in exemplos.items():
+            with self.subTest(codigo_completo=codigo_completo):
+                self.assertEqual(normalizar_codigo_natureza_despesa(codigo_completo), codigo_elemento)
+
+    def test_nao_extrai_codigo_de_descricao_ou_numero_com_nome(self) -> None:
+        self.assertIsNone(normalizar_codigo_natureza_despesa("Material de consumo"))
+        self.assertIsNone(normalizar_codigo_natureza_despesa("Material de consumo 30"))
+        self.assertIsNone(normalizar_codigo_natureza_despesa("40 - Tecnologia da informacao"))
+
+    def test_todos_os_sete_codigos_configurados_sao_aceitos(self) -> None:
         registros = [
-            {"id": indice, "natureza_despesa": natureza}
-            for indice, natureza in enumerate(NATUREZAS_DESPESA_CONSIDERADAS)
+            {"id": indice, "codigo_elemento_despesa": codigo}
+            for indice, codigo in enumerate(CODIGOS_NATUREZAS_DESPESA_CONSIDERADAS)
         ]
 
         self.assertEqual(tce.filtrar_naturezas_despesa(registros), registros)
 
+    def test_descricao_sem_codigo_nao_e_aceita(self) -> None:
+        registros = [{"id": 1, "natureza_despesa": "Material de consumo"}]
+
+        self.assertEqual(tce.filtrar_naturezas_despesa(registros), [])
+
     @patch("app.pipeline.ingestion.tce.buscar_dados_tce")
-    def test_listagem_descarta_natureza_fora_do_escopo_antes_de_retornar(
+    def test_listagem_descarta_codigo_fora_do_escopo_antes_de_retornar(
         self,
         buscar_dados_tce,
     ) -> None:
         buscar_dados_tce.return_value = {
             "elements": [
-                {"id": 1, "natureza_despesa": "Material de consumo"},
-                {"id": 2, "natureza_despesa": "Passagens e despesas com locomocao"},
+                {"id": 1, "codigo_elemento_despesa": "33903000", "natureza_despesa": "Material de consumo"},
+                {"id": 2, "codigo_elemento_despesa": "33903300", "natureza_despesa": "Passagens e despesas"},
             ]
         }
 
         registros = tce.listar_registros(tce.ENDPOINT_ITENS, {})
 
-        self.assertEqual(registros, [{"id": 1, "natureza_despesa": "Material de consumo"}])
+        self.assertEqual(
+            registros,
+            [{"id": 1, "codigo_elemento_despesa": "33903000", "natureza_despesa": "Material de consumo"}],
+        )
 
 
 if __name__ == "__main__":

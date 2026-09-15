@@ -1,18 +1,13 @@
 from typing import Any
 import logging
 import time
-import json
 import requests
 
 from app.core.logging import executar_com_log_ingestao, registrar_falha_ingestao
-from app.core.config import (
-    CODIGO_MUNICIPIO_TCE_PADRAO,
-    NATUREZAS_DESPESA_CONSIDERADAS,
-    TCE_CE_BASE_URL,
-)
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
 from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
-from app.utils import normalizar_data, normalizar_texto, primeiro_valor
+from app.pipeline.naturezas_despesa import codigo_natureza_despesa_monitorado
+from app.utils import normalizar_data, primeiro_valor
 
 BASE_URL = TCE_CE_BASE_URL
 TAMANHO_PAGINA = LIMITE_REGISTROS_POR_REQUISICAO
@@ -25,15 +20,9 @@ ENDPOINT_CONTRATOS = "contratos"
 ENDPOINT_CONTRATADOS = "contratados"
 ENDPOINT_ITENS = "itens_compoem_bens_servicos"
 
-_CAMINHOS_NATUREZA_DESPESA = (
-    ("natureza_despesa",),
-    ("descricao_natureza_despesa",),
-    ("nome_natureza_despesa",),
-    ("naturezaDespesa",),
+_CAMINHOS_CODIGO_ELEMENTO_DESPESA = (
+    ("codigo_elemento_despesa",),
 )
-_NATUREZAS_DESPESA_NORMALIZADAS = {
-    normalizar_texto(natureza) for natureza in NATUREZAS_DESPESA_CONSIDERADAS
-}
 
 
 def normalizar_data_tce(data: str) -> str:
@@ -41,16 +30,11 @@ def normalizar_data_tce(data: str) -> str:
 
 
 def filtrar_naturezas_despesa(registros: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Descarta registros com natureza informada fora do escopo configurado.
-
-    Endpoints que nao fornecem natureza de despesa permanecem intactos. Isso
-    permite aplicar a regra na fronteira da ingestao sem eliminar contratos e
-    entidades cujo schema nao possui esse atributo.
-    """
+    """Descarta registros cujo codigo de natureza/elemento nao esta no escopo."""
     filtrados: list[dict[str, Any]] = []
     for registro in registros:
-        natureza = primeiro_valor(registro, _CAMINHOS_NATUREZA_DESPESA)
-        if natureza is None or normalizar_texto(natureza) in _NATUREZAS_DESPESA_NORMALIZADAS:
+        codigo = primeiro_valor(registro, _CAMINHOS_CODIGO_ELEMENTO_DESPESA)
+        if codigo_natureza_despesa_monitorado(codigo):
             filtrados.append(registro)
     return filtrados
 
@@ -88,7 +72,12 @@ def buscar_dados_tce(endpoint: str, params: dict[str, Any], max_retries: int = 3
     return {"elements": []}
 
 
-def listar_registros(endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+def listar_registros(
+    endpoint: str,
+    params: dict[str, Any],
+    *,
+    filtrar_por_codigo_despesa: bool = True,
+) -> list[dict[str, Any]]:
     def buscar_pagina(start_index: int, tamanho_pagina: int) -> list[Any]:
         pagina = buscar_dados_tce(
             endpoint,
@@ -101,6 +90,8 @@ def listar_registros(endpoint: str, params: dict[str, Any]) -> list[dict[str, An
         return pagina if isinstance(pagina, list) else []
 
     registros = listar_por_start_index(buscar_pagina, tamanho_pagina=TAMANHO_PAGINA)
+    if not filtrar_por_codigo_despesa:
+        return registros
     return filtrar_naturezas_despesa(registros)
 
 
@@ -110,7 +101,7 @@ def buscar_municipios() -> list[dict[str, Any]]:
         etapa="buscar_municipios",
         parametros={},
         totais={"endpoint": "municipios"},
-        executar=lambda: listar_registros("municipios", {}),
+        executar=lambda: listar_registros("municipios", {}, filtrar_por_codigo_despesa=False),
     )
 
 
@@ -173,6 +164,7 @@ def buscar_contratos(
         executar=lambda: listar_registros(
             ENDPOINT_CONTRATOS,
             _params_periodo(data_inicial, data_final, codigo_municipio),
+            filtrar_por_codigo_despesa=False,
         ),
     )
 
@@ -195,6 +187,7 @@ def buscar_contratados(
         executar=lambda: listar_registros(
             ENDPOINT_CONTRATADOS,
             _params_periodo(data_inicial, data_final, codigo_municipio),
+            filtrar_por_codigo_despesa=False,
         ),
     )
 

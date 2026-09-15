@@ -86,6 +86,7 @@ class PncpIncrementalTest(unittest.TestCase):
                         {
                             "numeroItem": 1,
                             "descricao": "Material de consumo para escola",
+                            "codigoElementoDespesa": "33903000",
                         }
                     ],
                 },
@@ -93,8 +94,8 @@ class PncpIncrementalTest(unittest.TestCase):
                     "numeroControlePNCP": "12345678000199-1-000002/2026",
                     "anoCompra": 2026,
                     "sequencialCompra": 2,
-                    "objetoCompra": "Locacao de veiculos",
-                    "itens": [{"numeroItem": 1, "descricao": "Veiculo utilitario"}],
+                    "objetoCompra": "Material de consumo sem codigo",
+                    "itens": [{"numeroItem": 1, "descricao": "Material de consumo sem codigo"}],
                 },
             ],
             pca_planos=[],
@@ -103,6 +104,7 @@ class PncpIncrementalTest(unittest.TestCase):
 
         self.assertEqual(tabelas["contratacoes"]["numero_controle_pncp"].tolist(), ["12345678000199-1-000001/2026"])
         self.assertEqual(tabelas["itens"]["natureza_despesa_monitorada"].tolist(), ["Material de consumo"])
+        self.assertEqual(tabelas["itens"]["natureza_despesa_codigo_monitorado"].tolist(), ["30"])
 
     @patch("app.pipeline.pncp_incremental.database.registrar_sucesso_e_checkpoint_pncp")
     @patch("app.pipeline.pncp_incremental.pncp_persistence.persistir_tabelas")
@@ -128,6 +130,7 @@ class PncpIncrementalTest(unittest.TestCase):
             "sequencialCompra": 1,
             "dataPublicacaoPncp": "2026-09-09",
             "objetoCompra": "Material de consumo",
+            "codigoElementoDespesa": "33903000",
         }
         buscar_publicadas.return_value = [publicacao]
         buscar_atualizadas.return_value = [publicacao]
@@ -177,6 +180,7 @@ class PncpIncrementalTest(unittest.TestCase):
                 "numeroControlePNCP": "12345678000199-1-000001/2026",
                 "dataPublicacaoPncp": "2026-09-09",
                 "objetoCompra": "Material de consumo",
+                "codigoElementoDespesa": "33903000",
             }
         ]
 

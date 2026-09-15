@@ -36,12 +36,12 @@ class FornecedoresIngestionTest(unittest.TestCase):
 
     @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
     def test_coletar_fornecedor_retorna_payload_bruto(self, buscar_opencnpj) -> None:
-        buscar_opencnpj.return_value = {"porte": "ME", "razao_social": "EMPRESA TESTE LTDA"}
+        buscar_opencnpj.return_value = {"porte_empresa": "ME", "razao_social": "EMPRESA TESTE LTDA"}
 
         dados = fornecedores.coletar_fornecedor("12.345.678/0001-99")
 
         self.assertEqual(dados["cnpj"], "12345678000199")
-        self.assertEqual(dados["opencnpj"], {"porte": "ME", "razao_social": "EMPRESA TESTE LTDA"})
+        self.assertEqual(dados["opencnpj"], {"porte_empresa": "ME", "razao_social": "EMPRESA TESTE LTDA"})
         self.assertEqual(dados["razao_social"], "EMPRESA TESTE LTDA")
         self.assertEqual(dados["porte"], "ME")
         self.assertEqual(dados["porte_fonte"], "opencnpj")
@@ -98,7 +98,7 @@ class FornecedoresIngestionTest(unittest.TestCase):
         buscar_opencnpj.return_value = {
             "cnpj": "12345678000199",
             "razao_social": "EMPRESA TESTE LTDA",
-            "porte": "MICRO EMPRESA",
+            "porte_empresa": "MICRO EMPRESA",
         }
 
         dados = fornecedores.validar_fornecedor_me("12.345.678/0001-99")
@@ -125,7 +125,7 @@ class FornecedoresIngestionTest(unittest.TestCase):
         localizar_fornecedor_me.return_value = None
         buscar_opencnpj.return_value = {
             "razao_social": "EMPRESA MEDIA LTDA",
-            "porte": "DEMAIS",
+            "porte_empresa": "DEMAIS",
         }
 
         dados = fornecedores.validar_fornecedor_me("12.345.678/0001-99")

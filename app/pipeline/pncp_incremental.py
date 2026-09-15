@@ -9,7 +9,7 @@ import pandas as pd
 
 from app.core import database
 from app.core.config import (
-    NATUREZAS_DESPESA_CONSIDERADAS,
+    NATUREZAS_DESPESA_MONITORADAS,
     PNCP_JANELA_INICIAL_HORAS,
     PNCP_MODALIDADES_INCREMENTAIS,
     PNCP_UFS_INCREMENTAIS,
@@ -18,8 +18,12 @@ from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.enrichment.fornecedores import extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, pncp
+from app.pipeline.naturezas_despesa import (
+    descricao_natureza_despesa,
+    normalizar_codigo_natureza_despesa,
+)
 from app.pipeline.persistence import pncp as pncp_persistence
-from app.utils import normalizar_texto, primeiro_valor
+from app.utils import primeiro_valor
 
 
 CONTRATACAO_CAMPOS_CONTROLE_TEMPORAL = (
@@ -30,28 +34,11 @@ CONTRATACAO_CAMPOS_CONTROLE_TEMPORAL = (
 PCA_CAMPOS_CONTROLE_TEMPORAL = (
     ("dataPublicacaoPncp",),
     ("dataAtualizacao",),
+    ("dataAtualizacaoGlobalPCA",),
     ("dataAtualizacaoGlobal",),
 )
-CONTRATACAO_CAMPOS_NATUREZA = (
-    "objeto_compra",
-    "informacao_complementar",
-    "informacao_complementar_compra",
-)
-ITEM_CAMPOS_NATUREZA = (
-    "descricao",
-    "item_categoria_nome",
-    "categoria_item_catalogo_nome",
-    "classificacao_superior_nome",
-    "ncm_nbs_descricao",
-    "informacao_complementar",
-    "material_ou_servico_nome",
-)
-PCA_ITEM_CAMPOS_NATUREZA = (
-    "descricao",
-    "categoria_item_pca_nome",
-    "classificacao_superior_nome",
-    "pdm_descricao",
-    "codigo_item",
+CAMPOS_CODIGO_NATUREZA_DESPESA = (
+    "codigo_elemento_despesa",
 )
 _DATA_SOMENTE_DIA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$|^\d{8}$")
 
@@ -351,14 +338,6 @@ def _coletar_pca(
     return planos, itens, len(brutos) + totais["pca_itens"], totais
 
 
-def _naturezas_normalizadas() -> list[tuple[str, str]]:
-    return [
-        (natureza, normalizar_texto(natureza))
-        for natureza in NATUREZAS_DESPESA_CONSIDERADAS
-        if normalizar_texto(natureza)
-    ]
-
-
 def _linha_preenchida(valor: Any) -> bool:
     if valor is None:
         return False
@@ -377,18 +356,15 @@ def _linha_preenchida(valor: Any) -> bool:
 def _classificar_linha(
     linha: pd.Series,
     colunas: Iterable[str],
-    naturezas: list[tuple[str, str]],
-) -> tuple[str | None, str | None]:
+) -> tuple[str | None, str | None, str | None]:
     for coluna in colunas:
         if coluna not in linha:
             continue
-        texto = normalizar_texto(linha[coluna])
-        if not texto:
-            continue
-        for natureza_original, natureza_normalizada in naturezas:
-            if natureza_normalizada in texto:
-                return natureza_original, coluna
-    return None, None
+        codigo = normalizar_codigo_natureza_despesa(linha[coluna])
+        descricao = descricao_natureza_despesa(codigo)
+        if descricao is not None:
+            return descricao, coluna, codigo
+    return None, None, None
 
 
 def _classificar_dataframe(df: pd.DataFrame | None, colunas: Iterable[str]) -> pd.DataFrame:
@@ -396,15 +372,16 @@ def _classificar_dataframe(df: pd.DataFrame | None, colunas: Iterable[str]) -> p
         return pd.DataFrame()
 
     df = df.copy()
-    naturezas = _naturezas_normalizadas()
     if df.empty:
         df["natureza_despesa_monitorada"] = pd.Series(dtype="string")
+        df["natureza_despesa_codigo_monitorado"] = pd.Series(dtype="string")
         df["natureza_despesa_match_campo"] = pd.Series(dtype="string")
         return df
 
-    classificacoes = df.apply(lambda linha: _classificar_linha(linha, colunas, naturezas), axis=1)
-    df["natureza_despesa_monitorada"] = [natureza for natureza, _campo in classificacoes]
-    df["natureza_despesa_match_campo"] = [campo for _natureza, campo in classificacoes]
+    classificacoes = df.apply(lambda linha: _classificar_linha(linha, colunas), axis=1)
+    df["natureza_despesa_monitorada"] = [natureza for natureza, _campo, _codigo in classificacoes]
+    df["natureza_despesa_match_campo"] = [campo for _natureza, campo, _codigo in classificacoes]
+    df["natureza_despesa_codigo_monitorado"] = [codigo for _natureza, _campo, codigo in classificacoes]
     return df
 
 
@@ -427,8 +404,8 @@ def _pares_itens(df: pd.DataFrame) -> set[tuple[Any, Any]]:
 
 
 def _filtrar_contratacoes_por_natureza(tabelas: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
-    contratacoes = _classificar_dataframe(tabelas.get("contratacoes"), CONTRATACAO_CAMPOS_NATUREZA)
-    itens = _classificar_dataframe(tabelas.get("itens"), ITEM_CAMPOS_NATUREZA)
+    contratacoes = _classificar_dataframe(tabelas.get("contratacoes"), CAMPOS_CODIGO_NATUREZA_DESPESA)
+    itens = _classificar_dataframe(tabelas.get("itens"), CAMPOS_CODIGO_NATUREZA_DESPESA)
     resultados = tabelas.get("resultados", pd.DataFrame()).copy()
     contratos = tabelas.get("contratos", pd.DataFrame()).copy()
 
@@ -475,6 +452,11 @@ def _filtrar_contratacoes_por_natureza(tabelas: dict[str, pd.DataFrame]) -> dict
     }
 
 
+def filtrar_contratacoes_por_codigo_despesa(tabelas: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """Mantem contratacoes PNCP com codigo de despesa monitorado."""
+    return _filtrar_contratacoes_por_natureza(tabelas)
+
+
 def _pca_id_linha(linha: pd.Series) -> str:
     numero_controle = linha.get("numero_controle_pncp")
     if _linha_preenchida(numero_controle):
@@ -500,7 +482,7 @@ def _filtrar_pca_por_natureza(
     itens: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     planos = _adicionar_pca_id(_classificar_dataframe(planos, ()))
-    itens = _adicionar_pca_id(_classificar_dataframe(itens, PCA_ITEM_CAMPOS_NATUREZA))
+    itens = _adicionar_pca_id(_classificar_dataframe(itens, CAMPOS_CODIGO_NATUREZA_DESPESA))
 
     pcas_monitorados = set(itens.loc[_mascara_natureza(itens), "pca_id"]) if (
         not itens.empty and "pca_id" in itens.columns
@@ -535,7 +517,7 @@ def _preparar_tabelas(
     pca_planos: list[dict[str, Any]],
     pca_itens: list[dict[str, Any]],
 ) -> dict[str, pd.DataFrame]:
-    tabelas_contratacoes = _filtrar_contratacoes_por_natureza(
+    tabelas_contratacoes = filtrar_contratacoes_por_codigo_despesa(
         pncp_cleaning.limpar_contratacoes(contratacoes)
     )
     planos_df = pncp_cleaning.limpar_pca_planos(pca_planos)
@@ -578,9 +560,14 @@ def executar_ingestao_incremental_pncp(
         "max_paginas": max_paginas,
         "campos_controle_temporal": {
             "contratacoes": ["dataPublicacaoPncp", "dataAtualizacao", "dataAtualizacaoGlobal"],
-            "pca": ["dataPublicacaoPncp", "dataAtualizacao", "dataAtualizacaoGlobal"],
+            "pca": [
+                "dataPublicacaoPncp",
+                "dataAtualizacao",
+                "dataAtualizacaoGlobalPCA",
+                "dataAtualizacaoGlobal",
+            ],
         },
-        "naturezas_despesa_consideradas": NATUREZAS_DESPESA_CONSIDERADAS,
+        "naturezas_despesa_monitoradas": NATUREZAS_DESPESA_MONITORADAS,
     }
     executado_em = _agora_utc()
     quantidade_lida = 0

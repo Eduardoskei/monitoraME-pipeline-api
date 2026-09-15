@@ -82,7 +82,7 @@ def _get_json(
 
 
 def _numero_item(item: dict[str, Any]) -> int | None:
-    numero = _primeiro_valor(item, (("numeroItem",), ("numero_item",), ("itemNumero",)))
+    numero = item.get("numeroItem")
     try:
         return int(numero)
     except (TypeError, ValueError):
@@ -90,8 +90,8 @@ def _numero_item(item: dict[str, Any]) -> int | None:
 
 
 def _identificador_contrato(contrato: dict[str, Any]) -> tuple[int, int] | None:
-    ano = _primeiro_valor(contrato, (("anoContrato",), ("ano",)))
-    sequencial = _primeiro_valor(contrato, (("sequencialContrato",), ("sequencial",)))
+    ano = contrato.get("anoContrato")
+    sequencial = contrato.get("sequencialContrato")
 
     try:
         return int(ano), int(sequencial)
@@ -289,27 +289,9 @@ def extrair_identificador_compra(registro: dict[str, Any]) -> IdentificadorCompr
 
 
 def extrair_identificador_pca(registro: dict[str, Any]) -> IdentificadorPca | None:
-    cnpj = somente_digitos(
-        _primeiro_valor(
-            registro,
-            (
-                ("orgaoEntidade", "cnpj"),
-                ("orgao", "cnpj"),
-                ("cnpjOrgao",),
-                ("cnpj",),
-                ("cnpjOrgaoEntidade",),
-            ),
-        )
-    )
-    ano = _primeiro_valor(registro, (("anoPca",), ("ano",), ("anoPlano",)))
-    sequencial = _primeiro_valor(
-        registro,
-        (
-            ("sequencialPca",),
-            ("sequencial",),
-            ("sequencialPlano",),
-        ),
-    )
+    cnpj = somente_digitos(registro.get("cnpj"))
+    ano = registro.get("anoPca")
+    sequencial = registro.get("sequencialPca")
 
     if len(cnpj) != 14 or ano in (None, "") or sequencial in (None, ""):
         return None
@@ -340,15 +322,12 @@ def consultar_itens_pca(
     cnpj: str,
     ano: int,
     sequencial: int,
-    *,
-    categoria: int | None = None,
 ) -> list[dict[str, Any]]:
-    return _listar_paginas(
+    dados = _get_json(
         f"/v1/orgaos/{somente_digitos(cnpj)}/pca/{ano}/{sequencial}/itens",
-        {"categoria": categoria},
         base_url=GESTAO_BASE_URL,
-        tamanho_pagina=TAMANHO_PAGINA_DETALHES,
     )
+    return _extrair_lista(dados)
 
 
 def consultar_itens_compra(cnpj: str, ano: int, sequencial: int) -> list[dict[str, Any]]:

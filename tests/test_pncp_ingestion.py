@@ -47,6 +47,17 @@ class PncpIngestionTest(unittest.TestCase):
         self.assertEqual(pncp.normalizar_data_pncp("2025-01-07"), "20250107")
         self.assertEqual(pncp.normalizar_data_pncp("20250107"), "20250107")
 
+    def test_numero_item_usa_campo_oficial(self) -> None:
+        self.assertEqual(pncp._numero_item({"numeroItem": "2"}), 2)
+        self.assertIsNone(pncp._numero_item({"numero_item": "2"}))
+
+    def test_identificador_contrato_usa_campos_oficiais(self) -> None:
+        self.assertEqual(
+            pncp._identificador_contrato({"anoContrato": "2026", "sequencialContrato": "4"}),
+            (2026, 4),
+        )
+        self.assertIsNone(pncp._identificador_contrato({"ano": 2026, "sequencial": 4}))
+
     @patch("app.pipeline.ingestion.pagination.time.sleep")
     @patch("app.pipeline.ingestion.pncp._get_json")
     def test_listar_paginas_incrementa_pagina_ate_total_informado(self, get_json, sleep) -> None:
@@ -84,6 +95,15 @@ class PncpIngestionTest(unittest.TestCase):
         )
 
         self.assertEqual(identificador, pncp.IdentificadorPca("12345678000199", 2026, 3))
+        self.assertIsNone(
+            pncp.extrair_identificador_pca(
+                {
+                    "orgaoEntidade": {"cnpj": "12.345.678/0001-99"},
+                    "ano": 2026,
+                    "sequencial": 3,
+                }
+            )
+        )
 
     @patch("app.pipeline.ingestion.pncp._listar_paginas")
     def test_buscar_contratacoes_atualizadas_usa_endpoint_incremental(self, listar_paginas) -> None:
@@ -116,16 +136,37 @@ class PncpIngestionTest(unittest.TestCase):
         self.assertEqual(params, {"dataInicio": "20260908", "dataFim": "20260909"})
         self.assertEqual(listar_paginas.call_args.kwargs["tamanho_pagina"], pncp.TAMANHO_PAGINA_DETALHES)
 
-    @patch("app.pipeline.ingestion.pncp._listar_paginas")
-    def test_consultar_itens_pca_usa_api_de_gestao(self, listar_paginas) -> None:
-        listar_paginas.return_value = []
+    @patch("app.pipeline.ingestion.pncp._get_json")
+    def test_consultar_itens_pca_aceita_lista_direta_e_usa_api_de_gestao(self, get_json) -> None:
+        get_json.return_value = [{"numeroItem": 4, "codigoItem": "123"}]
 
-        pncp.consultar_itens_pca("12.345.678/0001-99", 2026, 3, categoria=1)
+        itens = pncp.consultar_itens_pca("12.345.678/0001-99", 2026, 3)
 
-        path, params = listar_paginas.call_args.args[:2]
-        self.assertEqual(path, "/v1/orgaos/12345678000199/pca/2026/3/itens")
-        self.assertEqual(params, {"categoria": 1})
-        self.assertEqual(listar_paginas.call_args.kwargs["base_url"], pncp.GESTAO_BASE_URL)
+        self.assertEqual(itens, [{"numeroItem": 4, "codigoItem": "123"}])
+        get_json.assert_called_once_with(
+            "/v1/orgaos/12345678000199/pca/2026/3/itens",
+            base_url=pncp.GESTAO_BASE_URL,
+        )
+
+    @patch("app.pipeline.ingestion.pncp._get_json")
+    def test_consultar_resultados_item_aceita_lista_direta(self, get_json) -> None:
+        get_json.return_value = [{"numeroItem": 1, "niFornecedor": "12345678000199"}]
+
+        resultados = pncp.consultar_resultados_item("12.345.678/0001-99", 2026, 7, 1)
+
+        self.assertEqual(resultados, [{"numeroItem": 1, "niFornecedor": "12345678000199"}])
+
+    @patch("app.pipeline.ingestion.pncp._get_json")
+    def test_consultar_contratos_compra_aceita_wrapper_data(self, get_json) -> None:
+        get_json.return_value = {
+            "data": [{"anoContrato": 2026, "sequencialContrato": 4}],
+            "totalRegistros": 1,
+            "totalPaginas": 1,
+        }
+
+        contratos = pncp.consultar_contratos_compra("12.345.678/0001-99", 2026, 7)
+
+        self.assertEqual(contratos, [{"anoContrato": 2026, "sequencialContrato": 4}])
 
     @patch("app.pipeline.ingestion.pncp.consultar_contratos_compra")
     @patch("app.pipeline.ingestion.pncp.consultar_resultados_item")
