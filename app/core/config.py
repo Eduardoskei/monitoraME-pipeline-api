@@ -89,14 +89,16 @@ PNCP_MODALIDADES_INCREMENTAIS = _int_tuple_env("PNCP_MODALIDADES_INCREMENTAIS", 
 PNCP_UFS_INCREMENTAIS = _str_tuple_env("PNCP_UFS_INCREMENTAIS", (UF_PADRAO,))
 PNCP_JANELA_INICIAL_HORAS = _optional_int_env("PNCP_JANELA_INICIAL_HORAS", 6)
 
-# Escopo de despesas acompanhado pelo monitoraME. Esta tupla e a unica fonte
-# de verdade do filtro aplicado aos registros recebidos das fontes externas.
-NATUREZAS_DESPESA_CONSIDERADAS = (
-    "Outros serviços de terceiros-pessoa jurídica",
-    "Material de consumo",
-    "Obras e instalações",
-    "Equipamentos e material permanente",
-    "Material, bem ou serviço para distribuição gratuita",
-    "Serviços de tecnologia da informação e comunicação pessoa jurídica",
-    "Serviços de consultoria",
-)
+# Escopo de despesas acompanhado pelo monitoraME. O codigo e a unica chave de
+# filtro; a descricao fica apenas como metadado de apresentacao.
+NATUREZAS_DESPESA_MONITORADAS = {
+    "39": "Outros serviços de terceiros-pessoa jurídica",
+    "51": "Obras e instalações",
+    "30": "Material de consumo",
+    "52": "Equipamentos e material permanente",
+    "32": "Material, bem ou serviço para distribuição gratuita",
+    "35": "Serviços de consultoria",
+    "40": "Serviços de tecnologia da informação e comunicação pessoa jurídica",
+}
+CODIGOS_NATUREZAS_DESPESA_CONSIDERADAS = tuple(NATUREZAS_DESPESA_MONITORADAS)
+NATUREZAS_DESPESA_CONSIDERADAS = tuple(NATUREZAS_DESPESA_MONITORADAS.values())

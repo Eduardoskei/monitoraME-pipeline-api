@@ -166,6 +166,7 @@ def limpar_pca_planos(registros: list[dict[str, Any]]) -> pd.DataFrame:
         "data_publicacao_pncp",
         "data_inclusao",
         "data_atualizacao",
+        "data_atualizacao_global_pca",
         "data_atualizacao_global",
     ]
     colunas_numericas = ["quantidade", "quantidade_itens", "valor_total"]

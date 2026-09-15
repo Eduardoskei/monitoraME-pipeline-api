@@ -76,6 +76,10 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.PNCP_UFS_INCREMENTAIS, ("CE",))
         self.assertEqual(config.PNCP_JANELA_INICIAL_HORAS, 6)
         self.assertEqual(len(config.NATUREZAS_DESPESA_CONSIDERADAS), 7)
+        self.assertEqual(
+            config.CODIGOS_NATUREZAS_DESPESA_CONSIDERADAS,
+            ("39", "51", "30", "52", "32", "35", "40"),
+        )
 
     def test_variaveis_incrementais_pncp_sao_configuraveis(self) -> None:
         env = {

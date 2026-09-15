@@ -63,9 +63,18 @@ class ConsultarPncpContratacoesTest(unittest.TestCase):
                 "anoCompra": 2025,
                 "sequencialCompra": 1,
                 "objetoCompra": "  Material escolar  ",
+                "codigoElementoDespesa": "33903000",
                 "valorTotalEstimado": "1.250,50",
                 "unidadeOrgao": {"codigoIbge": 2301000, "ufSigla": "CE"},
-            }
+            },
+            {
+                "numeroControlePNCP": "11444777000161-1-000002/2025",
+                "anoCompra": 2025,
+                "sequencialCompra": 2,
+                "objetoCompra": "Material de consumo sem codigo",
+                "valorTotalEstimado": "900,00",
+                "unidadeOrgao": {"codigoIbge": 2301000, "ufSigla": "CE"},
+            },
         ]
         listar_municipios.return_value = [
             {

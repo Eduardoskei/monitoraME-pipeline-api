@@ -220,6 +220,7 @@ class LimparPncpPcaTest(unittest.TestCase):
                     "uf": "CE",
                     "valorTotal": "1.000,50",
                     "dataAtualizacao": "2026-09-09",
+                    "dataAtualizacaoGlobalPCA": "2026-09-09T10:15:30",
                 },
                 {
                     "numeroControlePNCP": "12345678000199-2026-000001",
@@ -229,6 +230,7 @@ class LimparPncpPcaTest(unittest.TestCase):
                     "uf": "CE",
                     "valorTotal": "1.000,50",
                     "dataAtualizacao": "2026-09-09",
+                    "dataAtualizacaoGlobalPCA": "2026-09-09T10:15:30",
                 },
             ]
         )
@@ -250,6 +252,7 @@ class LimparPncpPcaTest(unittest.TestCase):
         self.assertEqual(planos.iloc[0]["cnpj"], "12345678000199")
         self.assertEqual(planos.iloc[0]["valor_total"], 1000.5)
         self.assertEqual(planos.iloc[0]["data_atualizacao"], "2026-09-09")
+        self.assertEqual(planos.iloc[0]["data_atualizacao_global_pca"], "2026-09-09T10:15:30")
         self.assertEqual(len(itens), 1)
         self.assertEqual(itens.iloc[0]["numero_item"], 7)
         self.assertEqual(itens.iloc[0]["categoria_item_pca_nome"], "Material de consumo")
