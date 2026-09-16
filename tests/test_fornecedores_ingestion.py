@@ -15,7 +15,7 @@ os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.b
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
 os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
-os.environ.setdefault("OPENCNPJ_BASE_URL", "https://kitana.opencnpj.com")
+os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
@@ -34,6 +34,15 @@ class FornecedoresIngestionTest(unittest.TestCase):
         self.assertEqual(fornecedores.normalizar_porte_me("micro-empresa"), "ME")
         self.assertIsNone(fornecedores.normalizar_porte_me("EPP"))
 
+    def test_extracao_usa_apenas_campos_receita_do_opencnpj_org(self) -> None:
+        self.assertEqual(
+            fornecedores.extrair_razao_social({"razao_social": "EMPRESA TESTE LTDA"}),
+            "EMPRESA TESTE LTDA",
+        )
+        self.assertEqual(fornecedores.extrair_porte_cadastral({"porte_empresa": "MICRO EMPRESA"}), "MICRO EMPRESA")
+        self.assertIsNone(fornecedores.extrair_razao_social({"razaoSocial": "EMPRESA TESTE LTDA"}))
+        self.assertIsNone(fornecedores.extrair_porte_cadastral({"porte": "MICRO EMPRESA"}))
+
     @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
     def test_coletar_fornecedor_retorna_payload_bruto(self, buscar_opencnpj) -> None:
         buscar_opencnpj.return_value = {"porte_empresa": "ME", "razao_social": "EMPRESA TESTE LTDA"}
@@ -46,6 +55,26 @@ class FornecedoresIngestionTest(unittest.TestCase):
         self.assertEqual(dados["porte"], "ME")
         self.assertEqual(dados["porte_fonte"], "opencnpj")
         self.assertEqual(dados["opencnpj_status"], "ok")
+
+    @patch("app.pipeline.ingestion.fornecedores.requests.get")
+    def test_buscar_opencnpj_usa_endpoint_receita_do_opencnpj_org(self, get) -> None:
+        response = get.return_value
+        response.status_code = 200
+        response.json.return_value = {
+            "cnpj": "ABCDEF12345678",
+            "razao_social": "EMPRESA TESTE LTDA",
+            "porte_empresa": "MICRO EMPRESA",
+        }
+
+        with patch.object(fornecedores, "OPENCNPJ_URL", "https://api.opencnpj.org"):
+            dados = fornecedores.buscar_opencnpj("ab.cde.f12/3456-78")
+
+        self.assertEqual(dados["porte_empresa"], "MICRO EMPRESA")
+        get.assert_called_once_with(
+            "https://api.opencnpj.org/ABCDEF12345678",
+            params={"datasets": "receita"},
+            timeout=(5, 25),
+        )
 
     @patch("app.pipeline.ingestion.fornecedores.time.sleep")
     @patch("app.pipeline.ingestion.fornecedores.requests.get")

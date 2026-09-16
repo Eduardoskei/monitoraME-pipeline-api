@@ -14,7 +14,7 @@ os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.b
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
 os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
-os.environ.setdefault("OPENCNPJ_BASE_URL", "https://kitana.opencnpj.com")
+os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
@@ -461,18 +461,23 @@ class LimparFornecedoresTest(unittest.TestCase):
             "cnpj": "11444777000161",
             "razao_social": "Comércio Exemplo LTDA",
             "nome_fantasia": "Exemplo Comercio",
-            "descricao_situacao_cadastral": "ATIVA",
-            "porte": "MICRO EMPRESA",
-            "capital_social": 100000,
-            "municipio": "AMONTADA",
-            "uf": "CE",
-            "cep": "62240000",
-            "ddd_telefone_1": "8834321234",
-            "opcao_pelo_simples": True,
-            "data_opcao_pelo_simples": "2018-01-01",
-            "data_exclusao_do_simples": None,
-            "opcao_pelo_mei": False,
-            "data_opcao_pelo_mei": None,
+            "situacao_cadastral": "ATIVA",
+            "porte_empresa": "MICRO EMPRESA",
+            "capital_social": "100000,00",
+            "endereco": {
+                "municipio": "AMONTADA",
+                "uf": "CE",
+                "cep": "62240000",
+            },
+            "contato": {
+                "telefones": ["8834321234"],
+            },
+            "simples_mei": {
+                "opcao_simples": "S",
+                "data_opcao_simples": "2018-01-01",
+                "opcao_mei": "N",
+                "data_opcao_mei": None,
+            },
             "qsa": [
                 {"nome_socio": "Fulano de Tal", "qualificacao_socio": "Socio-Administrador"},
             ],
@@ -494,9 +499,9 @@ class LimparFornecedoresTest(unittest.TestCase):
         # chave normalizada (sem acento/maiusculo) para agregacao/join, sem alterar o texto original
         self.assertEqual(df.iloc[0]["razao_social_chave"], "COMERCIO EXEMPLO LTDA")
         # colunas identificadoras (cep/telefone) nao podem virar numero
-        self.assertEqual(df.iloc[0]["opencnpj_cep"], "62240000")
-        self.assertEqual(df.iloc[0]["opencnpj_ddd_telefone_1"], "8834321234")
-        self.assertEqual(df.iloc[0]["opencnpj_descricao_situacao_cadastral"], "ATIVA")
+        self.assertEqual(df.iloc[0]["opencnpj_endereco_cep"], "62240000")
+        self.assertEqual(df.iloc[0]["opencnpj_contato_telefones"], "8834321234")
+        self.assertEqual(df.iloc[0]["opencnpj_situacao_cadastral"], "ATIVA")
         # porte padronizado para o vocabulario fixo usado na analise de compras ME
         self.assertEqual(df.iloc[0]["porte_padronizado"], "ME")
         self.assertTrue(df.iloc[0]["elegivel_me"])
@@ -510,22 +515,61 @@ class LimparFornecedoresTest(unittest.TestCase):
             [{"nome_socio": "Fulano de Tal", "qualificacao_socio": "Socio-Administrador"}],
         )
 
-    def test_porte_da_opencnpj_pode_vir_aninhado(self) -> None:
+    def test_porte_empresa_da_receita_define_elegibilidade(self) -> None:
         df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "11444777000161",
-                "opencnpj": {"porte": {"descricao": "MICRO EMPRESA"}},
+                "opencnpj": {"porte_empresa": "MICRO EMPRESA"},
             }
         ])
 
         self.assertEqual(df.iloc[0]["porte_padronizado"], "ME")
         self.assertTrue(df.iloc[0]["elegivel_me"])
 
+    @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
+    def test_pipeline_com_schema_receita_do_opencnpj_org(self, mock_opencnpj) -> None:
+        mock_opencnpj.return_value = {
+            "cnpj": "11444777000161",
+            "razao_social": "Comercio Exemplo LTDA",
+            "nome_fantasia": "Exemplo Comercio",
+            "situacao_cadastral": "ATIVA",
+            "data_inicio_atividade": "2026-01-15",
+            "cnae_principal": "6201501",
+            "cnaes_secundarios": ["4751201", "9511800"],
+            "natureza_juridica": "Sociedade Empresaria Limitada",
+            "endereco": {
+                "municipio": "AMONTADA",
+                "uf": "CE",
+            },
+            "capital_social": "100000,00",
+            "porte_empresa": "MICRO EMPRESA",
+            "simples_mei": {
+                "opcao_simples": "S",
+                "data_opcao_simples": "2018-01-01",
+                "opcao_mei": "N",
+                "data_opcao_mei": None,
+            },
+        }
+
+        fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
+        df = opencnpj_cleaning.limpar_fornecedores([fornecedor])
+        linha = df.iloc[0]
+
+        self.assertEqual(linha["porte_padronizado"], "ME")
+        self.assertTrue(linha["elegivel_me"])
+        self.assertEqual(linha["municipio_sede"], "AMONTADA")
+        self.assertEqual(linha["uf_sede"], "CE")
+        self.assertEqual(linha["cnae_principal_codigo"], "6201501")
+        self.assertEqual(linha["cnaes"], ["4751201", "9511800"])
+        self.assertTrue(linha["optante_simples_nacional"])
+        self.assertEqual(linha["data_opcao_simples_nacional"], "2018-01-01")
+        self.assertFalse(linha["optante_mei"])
+
     def test_epp_nao_e_elegivel_no_kpi_de_me(self) -> None:
         df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "98765432000111",
-                "opencnpj": {"porte": "EMPRESA DE PEQUENO PORTE"},
+                "opencnpj": {"porte_empresa": "EMPRESA DE PEQUENO PORTE"},
             }
         ])
 
@@ -538,20 +582,22 @@ class LimparFornecedoresTest(unittest.TestCase):
                 {
                     "cnpj": "11444777000161",
                     "opencnpj": {
-                        "porte": "MICRO EMPRESA",
-                        "opcao_pelo_simples": None,
-                        "opcao_pelo_mei": "não",
+                        "porte_empresa": "MICRO EMPRESA",
+                        "simples_mei": {
+                            "opcao_simples": None,
+                            "opcao_mei": "N",
+                        },
                     },
-                    "porte": "MICRO EMPRESA",
                 },
                 {
                     "cnpj": "98765432000111",
                     "opencnpj": {
-                        "porte": "DEMAIS",
-                        "opcao_pelo_simples": "sim",
-                        "opcao_pelo_mei": None,
+                        "porte_empresa": "DEMAIS",
+                        "simples_mei": {
+                            "opcao_simples": "S",
+                            "opcao_mei": None,
+                        },
                     },
-                    "porte": "DEMAIS",
                 },
             ]
         )
@@ -621,6 +667,9 @@ class DocumentoValidationTest(unittest.TestCase):
     def test_validar_cnpj_rejeita_sequencia_repetida(self) -> None:
         self.assertFalse(utils.validar_cnpj("11111111111111"))
 
+    def test_validar_cnpj_rejeita_alfanumerico_sem_erro(self) -> None:
+        self.assertFalse(utils.validar_cnpj("ABCDEF12345678"))
+
     def test_validar_cpf_aceita_digito_verificador_correto(self) -> None:
         self.assertTrue(utils.validar_cpf("11144477735"))
 
@@ -630,6 +679,9 @@ class DocumentoValidationTest(unittest.TestCase):
     def test_normalizar_cnpj_rejeita_quantidade_errada_de_digitos(self) -> None:
         self.assertIsNone(utils.normalizar_cnpj("123"))
         self.assertEqual(utils.normalizar_cnpj("11.444.777/0001-61"), "11444777000161")
+
+    def test_normalizar_cnpj_aceita_padrao_alfanumerico_da_receita(self) -> None:
+        self.assertEqual(utils.normalizar_cnpj("ab.cde.f12/3456-78"), "ABCDEF12345678")
 
     def test_padronizar_documentos_detecta_colunas_cnpj_e_cpf_por_nome(self) -> None:
         df = pd.DataFrame(

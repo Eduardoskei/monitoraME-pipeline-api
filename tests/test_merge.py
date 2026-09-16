@@ -14,7 +14,7 @@ os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.b
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
 os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
-os.environ.setdefault("OPENCNPJ_BASE_URL", "https://kitana.opencnpj.com")
+os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
@@ -85,19 +85,11 @@ def _fornecedores_df_valido() -> pd.DataFrame:
         mock_opencnpj.return_value = {
             "cnpj": "11444777000161",
             "razao_social": "Comércio Exemplo LTDA",
-            "porte": "MICRO EMPRESA",
+            "porte_empresa": "MICRO EMPRESA",
             "municipio": "AMONTADA",
             "uf": "CE",
-            "atividade_principal": {
-                "codigo": "6201501",
-                "descricao": "Desenvolvimento de programas de computador sob encomenda",
-            },
-            "cnaes": [
-                {
-                    "cnae": "6201501",
-                    "descricao": "Desenvolvimento de programas de computador sob encomenda",
-                }
-            ],
+            "cnae_principal": "6201501",
+            "cnaes_secundarios": ["4751201", "9511800"],
         }
         fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
@@ -188,19 +180,8 @@ class EnriquecerComFornecedorTest(unittest.TestCase):
         self.assertEqual(despesa["fornecedor_municipio_sede"], "AMONTADA")
         self.assertEqual(despesa["fornecedor_uf_sede"], "CE")
         self.assertEqual(despesa["fornecedor_cnae_principal_codigo"], "6201501")
-        self.assertEqual(
-            despesa["fornecedor_cnae_principal_descricao"],
-            "Desenvolvimento de programas de computador sob encomenda",
-        )
-        self.assertEqual(
-            despesa["fornecedor_cnaes"],
-            [
-                {
-                    "cnae": "6201501",
-                    "descricao": "Desenvolvimento de programas de computador sob encomenda",
-                }
-            ],
-        )
+        self.assertTrue(pd.isna(despesa["fornecedor_cnae_principal_descricao"]))
+        self.assertEqual(despesa["fornecedor_cnaes"], ["4751201", "9511800"])
 
 
 class ExtrairCnpjsDistintosTest(unittest.TestCase):

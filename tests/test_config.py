@@ -17,7 +17,7 @@ REQUIRED_ENV = {
     "IBGE_LOCALIDADES_BASE_URL": "https://servicodados.ibge.gov.br/api/v1/localidades",
     "PNCP_CONSULTA_BASE_URL": "https://pncp.gov.br/api/consulta",
     "PNCP_GESTAO_BASE_URL": "https://pncp.gov.br/api/pncp",
-    "OPENCNPJ_BASE_URL": "https://kitana.opencnpj.com",
+    "OPENCNPJ_BASE_URL": "https://api.opencnpj.org",
     "UF_PADRAO": "CE",
     "CODIGO_IBGE_PADRAO": "2304400",
     "CODIGO_MUNICIPIO_TCE_PADRAO": "010",
