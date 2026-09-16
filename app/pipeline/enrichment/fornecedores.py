@@ -18,7 +18,10 @@ _COLUNAS_FORNECEDOR_EXPORTADAS = (
     "cnpj_valido",
     "opencnpj_status",
     "optante_simples_nacional",
+    "data_opcao_simples_nacional",
+    "data_exclusao_simples_nacional",
     "optante_mei",
+    "data_opcao_mei",
 )
 
 

@@ -38,7 +38,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault(
     "OPENCNPJ_BASE_URL",
-    "https://kitana.opencnpj.com",
+    "https://api.opencnpj.org",
 )
 os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")

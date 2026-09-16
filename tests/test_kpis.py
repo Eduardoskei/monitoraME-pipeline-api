@@ -14,7 +14,7 @@ os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.b
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
 os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
 os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
-os.environ.setdefault("OPENCNPJ_BASE_URL", "https://kitana.opencnpj.com")
+os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
@@ -201,8 +201,8 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
         with patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj") as mock_opencnpj:
             # ME entra no KPI; EPP existe na fonte, mas nao entra neste projeto.
             mock_opencnpj.side_effect = [
-                {"cnpj": "11444777000161", "porte": "MICRO EMPRESA"},
-                {"cnpj": "98765432000111", "porte": "EMPRESA DE PEQUENO PORTE"},
+                {"cnpj": "11444777000161", "porte_empresa": "MICRO EMPRESA"},
+                {"cnpj": "98765432000111", "porte_empresa": "EMPRESA DE PEQUENO PORTE"},
             ]
             brutos = fornecedores.coletar_fornecedores_em_lote(
                 ["11.444.777/0001-61", "98.765.432/0001-11"], throttle_segundos=0

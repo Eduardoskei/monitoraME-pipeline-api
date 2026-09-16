@@ -282,7 +282,7 @@ def padronizar_textos(df: pd.DataFrame) -> pd.DataFrame:
 
 _PADRAO_COLUNA_IDENTIFICADOR = re.compile(
     r"(^|_)(codigo|cod|cnpj|cpf|cep|cep8|inscricao|controle|protocolo|"
-    r"telefone|celular|matricula|documento|numero|ni|cnae)($|_)"
+    r"telefones?|celular|matricula|documento|numero|ni|cnae)($|_)"
 )
 
 
@@ -432,6 +432,7 @@ def remover_duplicatas(df: pd.DataFrame, subset: Iterable[str] | None = None) ->
 
 _PADRAO_COLUNA_CNPJ = re.compile(r"(^|_)cnpj($|_)")
 _PADRAO_COLUNA_CPF = re.compile(r"(^|_)cpf($|_)")
+_CNPJ_NORMALIZADO_RE = re.compile(r"^[A-Z0-9]{12}\d{2}$")
 
 
 def _digito_verificador(base: str, pesos: list[int]) -> int:
@@ -441,9 +442,12 @@ def _digito_verificador(base: str, pesos: list[int]) -> int:
 
 
 def normalizar_cnpj(valor: Any) -> str | None:
-    """Reduz a apenas digitos; retorna None se nao tiver 14 digitos."""
-    digitos = somente_digitos(valor)
-    return digitos if len(digitos) == 14 else None
+    """Remove mascara e aceita CNPJ numerico ou alfanumerico no padrao da Receita."""
+    if valor is None:
+        return None
+    texto = remover_acentos(str(valor)).upper()
+    normalizado = re.sub(r"[^A-Z0-9]", "", texto)
+    return normalizado if _CNPJ_NORMALIZADO_RE.fullmatch(normalizado) else None
 
 
 def normalizar_cpf(valor: Any) -> str | None:
@@ -454,7 +458,7 @@ def normalizar_cpf(valor: Any) -> str | None:
 
 def validar_cnpj(cnpj: str | None) -> bool:
     """Confere os 2 digitos verificadores do CNPJ."""
-    if not isinstance(cnpj, str) or len(cnpj) != 14 or len(set(cnpj)) == 1:
+    if not isinstance(cnpj, str) or len(cnpj) != 14 or len(set(cnpj)) == 1 or not cnpj.isdigit():
         return False
     dv1 = _digito_verificador(cnpj[:12], [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
     dv2 = _digito_verificador(cnpj[:12] + str(dv1), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])

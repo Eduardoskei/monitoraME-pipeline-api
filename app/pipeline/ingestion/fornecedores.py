@@ -5,11 +5,13 @@ from app.core.config import OPENCNPJ_BASE_URL
 from app.core import database
 from app.utils import (
     banco_indisponivel as _ignorar_banco_indisponivel,
+    normalizar_cnpj,
     normalizar_texto as _normalizar_texto,
     somente_digitos,
 )
 
 OPENCNPJ_URL = OPENCNPJ_BASE_URL
+OPENCNPJ_DATASET_RECEITA = "receita"
 
 class FonteCadastralIndisponivelError(RuntimeError):
     """Uma fonte cadastral falhou; nao significa que o CNPJ nao possua dados."""
@@ -64,13 +66,13 @@ def _salvar_fornecedor_me_no_banco(fornecedor: dict[str, Any]) -> None:
         print(f"Falha ao salvar fornecedor ME no Postgres: {error}")
 
 
-def _get_json(url: str, max_retries: int = 2) -> dict[str, Any]:
+def _get_json(url: str, params: dict[str, Any] | None = None, max_retries: int = 2) -> dict[str, Any]:
     espera = 0.5
     ultimo_erro: Exception | None = None
 
     for tentativa in range(max_retries + 1):
         try:
-            response = requests.get(url, timeout=(5, 25))
+            response = requests.get(url, params=params or {}, timeout=(5, 25))
 
             if response.status_code == 404:
                 return {}
@@ -96,23 +98,26 @@ def _get_json(url: str, max_retries: int = 2) -> dict[str, Any]:
     raise FonteCadastralIndisponivelError(f"Falha inesperada na fonte cadastral: {url}")
 
 
+def _montar_requisicao_opencnpj(cnpj: str) -> tuple[str, dict[str, str]]:
+    base_url = OPENCNPJ_URL.rstrip("/")
+    return f"{base_url}/{cnpj}", {"datasets": OPENCNPJ_DATASET_RECEITA}
+
+
 def buscar_opencnpj(cnpj: str) -> dict[str, Any]:
-    cnpj_limpo = somente_digitos(cnpj)
-    if len(cnpj_limpo) != 14:
+    cnpj_limpo = normalizar_cnpj(cnpj)
+    if not cnpj_limpo:
         return {}
 
-    dados = _get_json(f"{OPENCNPJ_URL}/cnpj/{cnpj_limpo}")
-    if isinstance(dados.get("data"), dict):
-        return dados["data"]
-
+    url, params = _montar_requisicao_opencnpj(cnpj_limpo)
+    dados = _get_json(url, params=params)
     return dados
 
 
 def coletar_fornecedor(cnpj: str) -> dict[str, Any]:
-    cnpj_limpo = somente_digitos(cnpj)
-    if len(cnpj_limpo) != 14:
+    cnpj_limpo = normalizar_cnpj(cnpj)
+    if not cnpj_limpo:
         return {
-            "cnpj": cnpj_limpo,
+            "cnpj": somente_digitos(cnpj),
             "opencnpj": {},
             "razao_social": None,
             "porte": None,
@@ -140,8 +145,8 @@ def coletar_fornecedor(cnpj: str) -> dict[str, Any]:
 
 
 def extrair_fornecedor_me(dados: dict[str, Any]) -> dict[str, Any] | None:
-    cnpj = somente_digitos(dados.get("cnpj"))
-    if len(cnpj) != 14:
+    cnpj = normalizar_cnpj(dados.get("cnpj"))
+    if not cnpj:
         return None
 
     opencnpj = dados.get("opencnpj") if isinstance(dados.get("opencnpj"), dict) else {}
@@ -160,8 +165,8 @@ def extrair_fornecedor_me(dados: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def validar_fornecedor_me(cnpj: str) -> dict[str, Any] | None:
-    cnpj_limpo = somente_digitos(cnpj)
-    if len(cnpj_limpo) != 14:
+    cnpj_limpo = normalizar_cnpj(cnpj)
+    if not cnpj_limpo:
         return None
 
     fornecedor_salvo = _buscar_fornecedor_me_no_banco(cnpj_limpo)
@@ -194,7 +199,7 @@ def coletar_fornecedores_em_lote(
     resultados: list[dict[str, Any]] = []
 
     for cnpj in cnpjs:
-        cnpj_limpo = somente_digitos(cnpj)
+        cnpj_limpo = normalizar_cnpj(cnpj)
         if not cnpj_limpo or cnpj_limpo in vistos:
             continue
         vistos.add(cnpj_limpo)

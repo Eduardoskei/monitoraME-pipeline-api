@@ -30,72 +30,31 @@ _MARCADORES_AUSENTES = ("", "nao_informado", "NAO INFORMADO")
 
 _COLUNAS_MUNICIPIO_SEDE = (
     "municipio",
-    "cidade",
-    "cidade_nome",
+    "endereco_municipio",
     "opencnpj_municipio",
-    "opencnpj_municipio_nome",
-    "opencnpj_cidade",
-    "opencnpj_cidade_nome",
-    "opencnpj_estabelecimento_municipio",
-    "opencnpj_estabelecimento_municipio_nome",
-    "opencnpj_estabelecimento_cidade",
-    "opencnpj_estabelecimento_cidade_nome",
+    "opencnpj_endereco_municipio",
 )
 
 _COLUNAS_UF_SEDE = (
     "uf",
-    "estado_sigla",
+    "endereco_uf",
     "opencnpj_uf",
-    "opencnpj_estado_sigla",
-    "opencnpj_estabelecimento_uf",
-    "opencnpj_estabelecimento_estado_sigla",
-    "estado",
-    "opencnpj_estado",
-    "opencnpj_estabelecimento_estado",
+    "opencnpj_endereco_uf",
 )
 
 _COLUNAS_CNAE_PRINCIPAL_CODIGO = (
-    "cnae",
-    "cnae_fiscal",
     "cnae_principal",
-    "cnae_principal_codigo",
-    "cnae_fiscal_principal",
-    "opencnpj_cnae",
-    "opencnpj_cnae_fiscal",
     "opencnpj_cnae_principal",
-    "opencnpj_cnae_principal_codigo",
-    "opencnpj_cnae_fiscal_principal",
-    "opencnpj_atividade_principal_codigo",
-    "opencnpj_atividade_principal_id",
-    "opencnpj_atividade_economica_principal_codigo",
-    "opencnpj_estabelecimento_cnae",
-    "opencnpj_estabelecimento_cnae_fiscal",
-    "opencnpj_estabelecimento_cnae_principal",
-    "opencnpj_estabelecimento_cnae_principal_codigo",
-    "opencnpj_estabelecimento_atividade_principal_codigo",
-    "opencnpj_estabelecimento_atividade_principal_id",
 )
 
 _COLUNAS_CNAE_PRINCIPAL_DESCRICAO = (
-    "cnae_descricao",
     "cnae_principal_descricao",
-    "cnae_fiscal_descricao",
-    "opencnpj_cnae_descricao",
     "opencnpj_cnae_principal_descricao",
-    "opencnpj_cnae_fiscal_descricao",
-    "opencnpj_atividade_principal_descricao",
-    "opencnpj_atividade_principal_texto",
-    "opencnpj_atividade_economica_principal_descricao",
-    "opencnpj_estabelecimento_cnae_descricao",
-    "opencnpj_estabelecimento_cnae_principal_descricao",
-    "opencnpj_estabelecimento_atividade_principal_descricao",
-    "opencnpj_estabelecimento_atividade_principal_texto",
 )
 
 _COLUNAS_CNAES = (
-    "cnaes",
-    "opencnpj_cnaes",
-    "opencnpj_estabelecimento_cnaes",
+    "cnaes_secundarios",
+    "opencnpj_cnaes_secundarios",
 )
 
 
@@ -159,6 +118,24 @@ def normalizar_codigo_cnae(valor: Any) -> str | None:
     return digitos or None
 
 
+def normalizar_lista_cnaes(valor: Any) -> Any:
+    """Preserva listas de CNAEs e reidrata listas simples achatadas pelo cleaner generico."""
+    if valor is None:
+        return pd.NA
+    try:
+        if pd.isna(valor):
+            return pd.NA
+    except (TypeError, ValueError):
+        pass
+    if isinstance(valor, list):
+        return valor
+    if isinstance(valor, str):
+        partes = [parte.strip() for parte in valor.split(";") if parte.strip()]
+        codigos = [normalizar_codigo_cnae(parte) for parte in partes]
+        return [codigo for codigo in codigos if codigo]
+    return valor
+
+
 def _campo_canonico(df: pd.DataFrame, colunas: tuple[str, ...]) -> pd.Series:
     return primeira_coluna_preenchida(df, colunas, marcadores_vazios=_MARCADORES_AUSENTES)
 
@@ -183,13 +160,8 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         c
         for c in (
             "porte",
-            "opencnpj_porte",
-            "opencnpj_descricao_porte",
-            "opencnpj_porte_descricao",
-            "opencnpj_empresa_porte",
-            "opencnpj_empresa_porte_descricao",
-            "opencnpj_estabelecimento_porte",
-            "opencnpj_estabelecimento_porte_descricao",
+            "porte_empresa",
+            "opencnpj_porte_empresa",
         )
         if c in df.columns
     ]
@@ -208,10 +180,10 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         (
             c
             for c in (
-                "opencnpj_opcao_pelo_simples",
-                "opencnpj_simples_opcao_pelo_simples",
-                "opencnpj_empresa_opcao_pelo_simples",
-                "opencnpj_estabelecimento_opcao_pelo_simples",
+                "opcao_simples",
+                "simples_mei_opcao_simples",
+                "opencnpj_opcao_simples",
+                "opencnpj_simples_mei_opcao_simples",
             )
             if c in df.columns
         ),
@@ -224,10 +196,10 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         (
             c
             for c in (
-                "opencnpj_data_opcao_pelo_simples",
-                "opencnpj_simples_data_opcao_pelo_simples",
-                "opencnpj_empresa_data_opcao_pelo_simples",
-                "opencnpj_estabelecimento_data_opcao_pelo_simples",
+                "data_opcao_simples",
+                "simples_mei_data_opcao_simples",
+                "opencnpj_data_opcao_simples",
+                "opencnpj_simples_mei_data_opcao_simples",
             )
             if c in df.columns
         ),
@@ -240,10 +212,10 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         (
             c
             for c in (
-                "opencnpj_data_exclusao_do_simples",
-                "opencnpj_simples_data_exclusao_do_simples",
-                "opencnpj_empresa_data_exclusao_do_simples",
-                "opencnpj_estabelecimento_data_exclusao_do_simples",
+                "data_exclusao_simples",
+                "simples_mei_data_exclusao_simples",
+                "opencnpj_data_exclusao_simples",
+                "opencnpj_simples_mei_data_exclusao_simples",
             )
             if c in df.columns
         ),
@@ -256,10 +228,10 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         (
             c
             for c in (
-                "opencnpj_opcao_pelo_mei",
-                "opencnpj_simples_opcao_pelo_mei",
-                "opencnpj_empresa_opcao_pelo_mei",
-                "opencnpj_estabelecimento_opcao_pelo_mei",
+                "opcao_mei",
+                "simples_mei_opcao_mei",
+                "opencnpj_opcao_mei",
+                "opencnpj_simples_mei_opcao_mei",
             )
             if c in df.columns
         ),
@@ -268,11 +240,27 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     if coluna_mei:
         df["optante_mei"] = df[coluna_mei].map(normalizar_booleano).astype("boolean")
 
+    coluna_data_opcao_mei = next(
+        (
+            c
+            for c in (
+                "data_opcao_mei",
+                "simples_mei_data_opcao_mei",
+                "opencnpj_data_opcao_mei",
+                "opencnpj_simples_mei_data_opcao_mei",
+            )
+            if c in df.columns
+        ),
+        None,
+    )
+    if coluna_data_opcao_mei:
+        df["data_opcao_mei"] = df[coluna_data_opcao_mei]
+
     df["municipio_sede"] = _campo_canonico(df, _COLUNAS_MUNICIPIO_SEDE)
     df["uf_sede"] = _campo_canonico(df, _COLUNAS_UF_SEDE).map(normalizar_uf)
     df["cnae_principal_codigo"] = _campo_canonico(df, _COLUNAS_CNAE_PRINCIPAL_CODIGO).map(normalizar_codigo_cnae)
     df["cnae_principal_descricao"] = _campo_canonico(df, _COLUNAS_CNAE_PRINCIPAL_DESCRICAO)
-    df["cnaes"] = _campo_canonico(df, _COLUNAS_CNAES)
+    df["cnaes"] = _campo_canonico(df, _COLUNAS_CNAES).map(normalizar_lista_cnaes)
 
     return df
 
@@ -281,6 +269,7 @@ __all__ = [
     "limpar_fornecedores",
     "normalizar_booleano",
     "normalizar_codigo_cnae",
+    "normalizar_lista_cnaes",
     "normalizar_porte_empresarial",
     "normalizar_uf",
 ]
