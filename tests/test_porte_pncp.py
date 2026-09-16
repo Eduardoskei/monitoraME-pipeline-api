@@ -58,6 +58,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
             "3": "DEMAIS",
             "4": "NAO_SE_APLICA",
             "5": "NAO_INFORMADO",
+            "6": "MEI",
         }
 
         for entrada, esperado in casos.items():
@@ -72,6 +73,8 @@ class NormalizarPortePncpTest(unittest.TestCase):
             (3, "DEMAIS"),
             (4.0, "NAO_SE_APLICA"),
             (5, "NAO_INFORMADO"),
+            (6, "MEI"),
+            (6.0, "MEI"),
         ]
 
         for entrada, esperado in casos:
@@ -111,7 +114,7 @@ class NormalizarPortePncpTest(unittest.TestCase):
 
     def test_retorna_none_para_valores_invalidos(self) -> None:
         valores_invalidos = [
-            "6",
+            "7",
             "GRANDE EMPRESA",
             1.5,
             float("inf"),

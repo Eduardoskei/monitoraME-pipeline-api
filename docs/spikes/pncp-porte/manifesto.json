@@ -1,0 +1,1344 @@
+{
+  "executado_em": "2026-09-14T19:25:05.019423+00:00",
+  "seed": 20260914,
+  "por_estrato": 2,
+  "max_itens": 5,
+  "estratos": [
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-01",
+      "modalidade": 6,
+      "compras_universo": 413,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.004842615012106538,
+      "status": "ok",
+      "selecionadas": [
+        "07954605000160-1-000012/2025",
+        "07954480000179-1-023899/2024"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-01",
+      "modalidade": 8,
+      "compras_universo": 152,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.013157894736842105,
+      "status": "ok",
+      "selecionadas": [
+        "07288905000158-1-000002/2025",
+        "07954480000179-1-000031/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-01",
+      "modalidade": 9,
+      "compras_universo": 55,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.03636363636363636,
+      "status": "ok",
+      "selecionadas": [
+        "33787094000140-1-000044/2025",
+        "06750525000120-1-000114/2024"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-05",
+      "modalidade": 6,
+      "compras_universo": 355,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.005633802816901409,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-006830/2025",
+        "09444530000101-1-000044/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-05",
+      "modalidade": 8,
+      "compras_universo": 958,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.0020876826722338203,
+      "status": "ok",
+      "selecionadas": [
+        "26989715000102-1-000950/2025",
+        "07954480000179-1-007637/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-05",
+      "modalidade": 9,
+      "compras_universo": 157,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.012738853503184714,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-007534/2025",
+        "07954605000160-1-000191/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-09",
+      "modalidade": 6,
+      "compras_universo": 523,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.0038240917782026767,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-019396/2025",
+        "07954605000160-1-000468/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-09",
+      "modalidade": 8,
+      "compras_universo": 1372,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.0014577259475218659,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-016274/2025",
+        "07954480000179-1-018667/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2304400",
+      "municipio": "Fortaleza",
+      "periodo": "2025-09",
+      "modalidade": 9,
+      "compras_universo": 580,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.0034482758620689655,
+      "status": "ok",
+      "selecionadas": [
+        "00509968000148-1-002950/2025",
+        "00509018000113-1-002637/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-01",
+      "modalidade": 6,
+      "compras_universo": 7,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.2857142857142857,
+      "status": "ok",
+      "selecionadas": [
+        "41683884000103-1-000002/2025",
+        "41683884000103-1-000001/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-01",
+      "modalidade": 8,
+      "compras_universo": 1,
+      "compras_sorteadas": 1,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "42399307000157-1-000001/2024"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-01",
+      "modalidade": 9,
+      "compras_universo": 3,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.6666666666666666,
+      "status": "ok",
+      "selecionadas": [
+        "41593983000102-1-000002/2025",
+        "41593983000102-1-000001/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-05",
+      "modalidade": 6,
+      "compras_universo": 6,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.3333333333333333,
+      "status": "ok",
+      "selecionadas": [
+        "06582449000191-1-000014/2025",
+        "06582555000175-1-000013/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-05",
+      "modalidade": 8,
+      "compras_universo": 15,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.13333333333333333,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-006340/2025",
+        "07954480000179-1-005729/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-05",
+      "modalidade": 9,
+      "compras_universo": 16,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.125,
+      "status": "ok",
+      "selecionadas": [
+        "41923828000107-1-000009/2025",
+        "41593983000102-1-000004/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-09",
+      "modalidade": 6,
+      "compras_universo": 5,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.4,
+      "status": "ok",
+      "selecionadas": [
+        "41923828000107-1-000022/2025",
+        "06582555000175-1-000021/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-09",
+      "modalidade": 8,
+      "compras_universo": 21,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.09523809523809523,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-016711/2025",
+        "07954480000179-1-016795/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2300754",
+      "municipio": "Amontada",
+      "periodo": "2025-09",
+      "modalidade": 9,
+      "compras_universo": 1,
+      "compras_sorteadas": 1,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "41683884000103-1-000012/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-01",
+      "modalidade": 6,
+      "compras_universo": 1,
+      "compras_sorteadas": 1,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-023963/2024"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-01",
+      "modalidade": 8,
+      "compras_universo": 8,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.25,
+      "status": "ok",
+      "selecionadas": [
+        "07598634000137-1-000002/2025",
+        "07954480000179-1-023928/2024"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-01",
+      "modalidade": 9,
+      "compras_universo": 1,
+      "compras_sorteadas": 1,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "10744098000145-1-000008/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-05",
+      "modalidade": 6,
+      "compras_universo": 17,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.11764705882352941,
+      "status": "ok",
+      "selecionadas": [
+        "07598634000137-1-000273/2024",
+        "07598634000137-1-000040/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-05",
+      "modalidade": 8,
+      "compras_universo": 69,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.028985507246376812,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-007199/2025",
+        "07954480000179-1-006626/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-05",
+      "modalidade": 9,
+      "compras_universo": 16,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.125,
+      "status": "ok",
+      "selecionadas": [
+        "07598634000137-1-000034/2025",
+        "09485046000112-1-000046/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-09",
+      "modalidade": 6,
+      "compras_universo": 15,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.13333333333333333,
+      "status": "ok",
+      "selecionadas": [
+        "12208466000166-1-000017/2025",
+        "07598634000137-1-000112/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-09",
+      "modalidade": 8,
+      "compras_universo": 101,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.019801980198019802,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-018472/2025",
+        "07954480000179-1-018970/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2312908",
+      "municipio": "Sobral",
+      "periodo": "2025-09",
+      "modalidade": 9,
+      "compras_universo": 3,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.6666666666666666,
+      "status": "ok",
+      "selecionadas": [
+        "07598634000137-1-000099/2025",
+        "07598634000137-1-000108/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-01",
+      "modalidade": 6,
+      "compras_universo": 4,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.5,
+      "status": "ok",
+      "selecionadas": [
+        "07974082000114-1-000005/2025",
+        "07974082000114-1-000002/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-01",
+      "modalidade": 8,
+      "compras_universo": 8,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.25,
+      "status": "ok",
+      "selecionadas": [
+        "07974082000114-1-000004/2025",
+        "07974082000114-1-000013/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-01",
+      "modalidade": 9,
+      "compras_universo": 2,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "07974082000114-1-000003/2025",
+        "07974082000114-1-000011/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-05",
+      "modalidade": 6,
+      "compras_universo": 5,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.4,
+      "status": "ok",
+      "selecionadas": [
+        "10744098000145-1-000067/2025",
+        "07974082000114-1-000061/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-05",
+      "modalidade": 8,
+      "compras_universo": 46,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.043478260869565216,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-005771/2025",
+        "11436747000103-1-000012/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-05",
+      "modalidade": 9,
+      "compras_universo": 6,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.3333333333333333,
+      "status": "ok",
+      "selecionadas": [
+        "18621825000199-1-000007/2025",
+        "07974082000114-1-000065/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-09",
+      "modalidade": 6,
+      "compras_universo": 7,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.2857142857142857,
+      "status": "ok",
+      "selecionadas": [
+        "07974082000114-1-000130/2025",
+        "07974082000114-1-000128/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-09",
+      "modalidade": 8,
+      "compras_universo": 81,
+      "compras_sorteadas": 2,
+      "fracao_amostral_compras": 0.024691358024691357,
+      "status": "ok",
+      "selecionadas": [
+        "07954480000179-1-017018/2025",
+        "07954480000179-1-019131/2025"
+      ]
+    },
+    {
+      "municipio_ibge": "2307304",
+      "municipio": "Juazeiro do Norte",
+      "periodo": "2025-09",
+      "modalidade": 9,
+      "compras_universo": 1,
+      "compras_sorteadas": 1,
+      "fracao_amostral_compras": 1.0,
+      "status": "ok",
+      "selecionadas": [
+        "07974082000114-1-000135/2025"
+      ]
+    }
+  ],
+  "compras": [
+    {
+      "compra": "07954605000160-1-000012/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 82,
+      "itens_sorteados": [
+        33928,
+        33951,
+        33924,
+        33911,
+        33942
+      ]
+    },
+    {
+      "compra": "07954480000179-1-023899/2024",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07288905000158-1-000002/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-000031/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "33787094000140-1-000044/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "06750525000120-1-000114/2024",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-006830/2025",
+      "itens": 4,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 4,
+      "itens_sorteados": [
+        1,
+        3,
+        4,
+        2
+      ]
+    },
+    {
+      "compra": "09444530000101-1-000044/2025",
+      "itens": 2,
+      "itens_sem_resultado": 2,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 2,
+      "itens_sorteados": [
+        2,
+        1
+      ]
+    },
+    {
+      "compra": "26989715000102-1-000950/2025",
+      "itens": 2,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 2,
+      "itens_sorteados": [
+        2,
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-007637/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-007534/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954605000160-1-000191/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        34974
+      ]
+    },
+    {
+      "compra": "07954480000179-1-019396/2025",
+      "itens": 5,
+      "itens_sem_resultado": 2,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 7,
+      "itens_sorteados": [
+        1,
+        6,
+        3,
+        5,
+        2
+      ]
+    },
+    {
+      "compra": "07954605000160-1-000468/2025",
+      "itens": 2,
+      "itens_sem_resultado": 2,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 2,
+      "itens_sorteados": [
+        36867,
+        36866
+      ]
+    },
+    {
+      "compra": "07954480000179-1-016274/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 5,
+      "itens_sorteados": [
+        2,
+        1,
+        3,
+        5,
+        4
+      ]
+    },
+    {
+      "compra": "07954480000179-1-018667/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "00509968000148-1-002950/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "00509018000113-1-002637/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41683884000103-1-000002/2025",
+      "itens": 5,
+      "itens_sem_resultado": 5,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 12,
+      "itens_sorteados": [
+        1,
+        11,
+        5,
+        9,
+        7
+      ]
+    },
+    {
+      "compra": "41683884000103-1-000001/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "42399307000157-1-000001/2024",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41593983000102-1-000002/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41593983000102-1-000001/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "06582449000191-1-000014/2025",
+      "itens": 5,
+      "itens_sem_resultado": 5,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 190,
+      "itens_sorteados": [
+        123,
+        6,
+        187,
+        100,
+        77
+      ]
+    },
+    {
+      "compra": "06582555000175-1-000013/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-006340/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-005729/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41923828000107-1-000009/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41593983000102-1-000004/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41923828000107-1-000022/2025",
+      "itens": 3,
+      "itens_sem_resultado": 3,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 3,
+      "itens_sorteados": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "compra": "06582555000175-1-000021/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-016711/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-016795/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "41683884000103-1-000012/2025",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-023963/2024",
+      "itens": 5,
+      "itens_sem_resultado": 5,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 18,
+      "itens_sorteados": [
+        6,
+        3,
+        14,
+        5,
+        18
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000002/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        5203253
+      ]
+    },
+    {
+      "compra": "07954480000179-1-023928/2024",
+      "itens": 1,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "10744098000145-1-000008/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000273/2024",
+      "itens": 5,
+      "itens_sem_resultado": 5,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 7,
+      "itens_sorteados": [
+        4196031,
+        4196072,
+        4196008,
+        4196074,
+        4196076
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000040/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 12,
+      "itens_sorteados": [
+        5837469,
+        5837475,
+        5837503,
+        5837479,
+        5837486
+      ]
+    },
+    {
+      "compra": "07954480000179-1-007199/2025",
+      "itens": 2,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 2,
+      "itens_sorteados": [
+        1,
+        2
+      ]
+    },
+    {
+      "compra": "07954480000179-1-006626/2025",
+      "itens": 5,
+      "itens_sem_resultado": 3,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 21,
+      "itens_sorteados": [
+        11,
+        7,
+        21,
+        4,
+        1
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000034/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        5826473
+      ]
+    },
+    {
+      "compra": "09485046000112-1-000046/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "12208466000166-1-000017/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000112/2025",
+      "itens": 5,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 34,
+      "itens_sorteados": [
+        6545739,
+        6545613,
+        6545643,
+        6545377,
+        6545741
+      ]
+    },
+    {
+      "compra": "07954480000179-1-018472/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07954480000179-1-018970/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 23,
+      "itens_sorteados": [
+        7,
+        8,
+        22,
+        17,
+        19
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000099/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        6426372
+      ]
+    },
+    {
+      "compra": "07598634000137-1-000108/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        6512421
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000005/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 8,
+      "itens_sorteados": [
+        4,
+        8,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000002/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 5,
+      "duplicatas": 0,
+      "itens_universo": 44,
+      "itens_sorteados": [
+        4,
+        36,
+        25,
+        10,
+        43
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000004/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000013/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000003/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000011/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "10744098000145-1-000067/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 7,
+      "itens_sorteados": [
+        2,
+        7,
+        1,
+        4,
+        6
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000061/2025",
+      "itens": 5,
+      "itens_sem_resultado": 5,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 123,
+      "itens_sorteados": [
+        32,
+        81,
+        91,
+        114,
+        79
+      ]
+    },
+    {
+      "compra": "07954480000179-1-005771/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 7,
+      "itens_sorteados": [
+        4,
+        7,
+        2,
+        1,
+        3
+      ]
+    },
+    {
+      "compra": "11436747000103-1-000012/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 20,
+      "itens_sorteados": [
+        11,
+        6,
+        19,
+        20,
+        7
+      ]
+    },
+    {
+      "compra": "18621825000199-1-000007/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000065/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000130/2025",
+      "itens": 4,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 4,
+      "itens_sorteados": [
+        1,
+        3,
+        2,
+        4
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000128/2025",
+      "itens": 4,
+      "itens_sem_resultado": 1,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 4,
+      "itens_sorteados": [
+        2,
+        3,
+        1,
+        4
+      ]
+    },
+    {
+      "compra": "07954480000179-1-017018/2025",
+      "itens": 5,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 11,
+      "itens_sorteados": [
+        11,
+        4,
+        2,
+        10,
+        5
+      ]
+    },
+    {
+      "compra": "07954480000179-1-019131/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    },
+    {
+      "compra": "07974082000114-1-000135/2025",
+      "itens": 1,
+      "itens_sem_resultado": 0,
+      "resultados_cancelados": 0,
+      "duplicatas": 0,
+      "itens_universo": 1,
+      "itens_sorteados": [
+        1
+      ]
+    }
+  ],
+  "erros": [],
+  "qualidade": {
+    "motivos": {
+      "valido": 92,
+      "codigo_5": 7
+    },
+    "fornecedores_distintos": 57,
+    "pessoas_fisicas_com_porte_empresarial": 3,
+    "fornecedores_com_multiplos_portes": 0,
+    "registros_sem_identificador_fornecedor": 0
+  }
+}

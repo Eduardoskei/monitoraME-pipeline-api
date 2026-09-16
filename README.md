@@ -279,3 +279,29 @@ Use descoberta explícita:
 ```bash
 python -m unittest discover -s tests
 ```
+
+## Spike de qualidade do porte empresarial no PNCP
+
+O [relatório do spike](docs/spikes/pncp-porte/README.md) apresenta a distribuição de MEI, ME, EPP, Demais Empresas, Não se aplica e Não informado, com recortes por município e período e limitações da amostra.
+
+A coleta independente de banco de dados pode ser reproduzida com:
+
+```bash
+python -m scripts.spike_pncp_porte --output docs/spikes/pncp-porte
+```
+
+A rotina salva as tabelas CSV, o manifesto da amostragem e as respostas públicas em cache local. Para uma nova fotografia dos dados, use outro diretório em `--output`.
+
+### PEN-005: representatividade para Ceará/2025
+
+O [relatório de execução do PEN-005](docs/spikes/pncp-ce-2025/README.md) registra a situação da coleta sobre a população confirmada: contratações publicadas no Ceará durante todo o ano de 2025, abrangendo as modalidades disponíveis. O plano inclui sorteio probabilístico, pesos e intervalos de confiança; a conclusão do requisito depende da coleta efetiva e da revalidação do cadastro.
+
+Para executar ou retomar com o cache:
+
+```bash
+python -m scripts.spike_pncp_representatividade --output docs/spikes/pncp-ce-2025
+```
+
+Falhas persistentes interrompem a rodada, cancelam consultas pendentes e geram relatório de coleta incompleta. O resultado de 7,07% do piloto não é uma estimativa estadual.
+
+A normalizacao do pipeline (`app/pipeline/cleaners/pncp.py`) e o spike reconhecem os seis codigos do catalogo, incluindo `6 = MEI`. O spike mede o campo original `porteFornecedorId`: valores ausentes ou invalidos contam como Nao informado, com o motivo separado. A normalizacao do pipeline mantem sua regra de priorizar a descricao e preservar valores desconhecidos como nulos. Essa distincao evita mascarar lacunas do campo original na analise de cobertura.

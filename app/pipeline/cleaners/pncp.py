@@ -29,6 +29,7 @@ _MAPA_PORTE_PNCP = {
     "3": "DEMAIS",
     "4": "NAO_SE_APLICA",
     "5": "NAO_INFORMADO",
+    "6": "MEI",
 }
 _MAPA_DESCRICAO_PORTE_PNCP = {
     "MEI": "MEI",
