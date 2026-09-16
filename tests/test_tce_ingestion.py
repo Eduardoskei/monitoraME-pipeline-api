@@ -161,6 +161,52 @@ class TceIngestionTest(unittest.TestCase):
 
         self.assertEqual(registros, [{"numero_licitacao": "B", "modalidade_licitacao": "9"}])
         registrar_log_ingestao.assert_called_once()
+        self.assertFalse(listar_registros.call_args.kwargs.get("filtrar_por_codigo_despesa", False))
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.listar_registros")
+    def test_buscar_contratacoes_nao_exige_codigo_de_despesa(
+        self,
+        listar_registros,
+        _registrar_log_ingestao,
+    ) -> None:
+        listar_registros.return_value = [
+            {"numero_licitacao": "A", "descricao_objeto_licitacao": "Material de expediente"}
+        ]
+
+        registros = tce.buscar_contratacoes("20250101", "20250107")
+
+        self.assertEqual(registros, [{"numero_licitacao": "A", "descricao_objeto_licitacao": "Material de expediente"}])
+        self.assertFalse(listar_registros.call_args.kwargs.get("filtrar_por_codigo_despesa", False))
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.listar_registros")
+    def test_buscar_itens_contratacao_nao_exige_codigo_de_despesa(
+        self,
+        listar_registros,
+        _registrar_log_ingestao,
+    ) -> None:
+        listar_registros.return_value = [
+            {
+                "numero_licitacao": "A",
+                "numero_sequencial_item_licitacao": 1,
+                "descricao_item_licitacao": "EXTRATOR DE GRAMPOS",
+            }
+        ]
+
+        registros = tce.buscar_itens_contratacao("20250101", "20250107")
+
+        self.assertEqual(
+            registros,
+            [
+                {
+                    "numero_licitacao": "A",
+                    "numero_sequencial_item_licitacao": 1,
+                    "descricao_item_licitacao": "EXTRATOR DE GRAMPOS",
+                }
+            ],
+        )
+        self.assertFalse(listar_registros.call_args.kwargs.get("filtrar_por_codigo_despesa", False))
 
     @patch("app.core.logging.log_database.registrar_log_ingestao")
     @patch("app.pipeline.ingestion.tce.listar_registros")

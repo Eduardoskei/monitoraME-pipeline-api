@@ -74,6 +74,68 @@ class PncpIncrementalTest(unittest.TestCase):
             )
         )
 
+    def test_pca_atualizacao_usa_data_publicacao_pncp_oficial_e_id_pca(self) -> None:
+        inicio = datetime(2026, 9, 9, 14, 0, tzinfo=timezone.utc)
+        registro = {
+            "idPcaPncp": "12345678000199-0-000001/2026",
+            "dataPublicacaoPNCP": "2026-09-09",
+        }
+
+        self.assertTrue(
+            pncp_incremental._registro_alterado_desde(
+                registro,
+                inicio,
+                pncp_incremental.PCA_CAMPOS_CONTROLE_TEMPORAL,
+            )
+        )
+        self.assertEqual(
+            pncp_incremental._chave_pca(registro, 5),
+            ("numero_controle_pncp", "12345678000199-0-000001/2026"),
+        )
+
+    @patch("app.pipeline.pncp_incremental.pncp.consultar_itens_pca")
+    @patch("app.pipeline.pncp_incremental.pncp.consultar_pca_consolidado")
+    @patch("app.pipeline.pncp_incremental.pncp.buscar_pcas_atualizados")
+    def test_coletar_pca_usa_id_pca_pncp_para_buscar_detalhes(
+        self,
+        buscar_pcas_atualizados,
+        consultar_pca_consolidado,
+        consultar_itens_pca,
+    ) -> None:
+        janela = pncp_incremental.JanelaIncremental(
+            escopo="pncp:teste",
+            inicio=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
+            fim=datetime(2026, 1, 1, 1, 0, tzinfo=timezone.utc),
+            checkpoint_anterior=None,
+        )
+        buscar_pcas_atualizados.return_value = [
+            {
+                "idPcaPncp": "10054583000197-0-000004/2026",
+                "anoPca": 2026,
+                "dataPublicacaoPNCP": "2026-01-01T00:00:40",
+                "orgaoEntidadeCnpj": "10054583000197",
+            }
+        ]
+        consultar_pca_consolidado.return_value = {
+            "numeroControlePNCP": "10054583000197-0-000004/2026",
+            "uf": "CE",
+        }
+        consultar_itens_pca.return_value = [{"numeroItem": 8, "descricao": "EXTRATOR DE GRAMPOS"}]
+
+        planos, itens, quantidade_lida, totais = pncp_incremental._coletar_pca(
+            janela,
+            ufs=("CE",),
+            max_paginas=1,
+        )
+
+        consultar_pca_consolidado.assert_called_once_with("10054583000197", 2026, 4)
+        consultar_itens_pca.assert_called_once_with("10054583000197", 2026, 4)
+        self.assertEqual(planos[0]["numeroControlePNCP"], "10054583000197-0-000004/2026")
+        self.assertEqual(itens[0]["cnpj"], "10054583000197")
+        self.assertEqual(itens[0]["sequencialPca"], 4)
+        self.assertEqual(quantidade_lida, 2)
+        self.assertEqual(totais["pca_itens"], 1)
+
     def test_preparar_tabelas_filtra_por_naturezas_configuradas(self) -> None:
         tabelas = pncp_incremental._preparar_tabelas(
             contratacoes=[

@@ -74,6 +74,10 @@ class PncpIngestionTest(unittest.TestCase):
         self.assertEqual(get_json.call_args_list[0].args[1]["tamanhoPagina"], 2)
         sleep.assert_called_once()
 
+    def test_total_paginas_usa_campo_oficial(self) -> None:
+        self.assertEqual(pncp._total_paginas({"totalPaginas": "3"}), 3)
+        self.assertIsNone(pncp._total_paginas({"total_pages": 3}))
+
     def test_extrair_identificador_compra_usa_orgao_entidade(self) -> None:
         identificador = pncp.extrair_identificador_compra(
             {
@@ -84,6 +88,15 @@ class PncpIngestionTest(unittest.TestCase):
         )
 
         self.assertEqual(identificador, pncp.IdentificadorCompra("12345678000199", 2025, 7))
+        self.assertIsNone(
+            pncp.extrair_identificador_compra(
+                {
+                    "cnpj": "12.345.678/0001-99",
+                    "anoContratacao": 2025,
+                    "sequencialContratacao": 7,
+                }
+            )
+        )
 
     def test_extrair_identificador_pca_usa_campos_oficiais(self) -> None:
         identificador = pncp.extrair_identificador_pca(
@@ -104,6 +117,17 @@ class PncpIngestionTest(unittest.TestCase):
                 }
             )
         )
+        self.assertEqual(
+            pncp.extrair_identificador_pca(
+                {
+                    "anoPca": 2026,
+                    "idPcaPncp": "10054583000197-0-000004/2026",
+                    "orgaoEntidadeCnpj": "10054583000197",
+                }
+            ),
+            pncp.IdentificadorPca("10054583000197", 2026, 4),
+        )
+        self.assertIsNone(pncp.extrair_identificador_pca({"anoPca": 2026, "idPcaPncp": "string"}))
 
     @patch("app.pipeline.ingestion.pncp._listar_paginas")
     def test_buscar_contratacoes_atualizadas_usa_endpoint_incremental(self, listar_paginas) -> None:
