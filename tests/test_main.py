@@ -125,8 +125,8 @@ class MainTest(unittest.TestCase):
         ]
 
         payload = main.tce_contratos(
-            data_inicial="20250101",
-            data_final="20250131",
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
             codigo_municipio="010",
             enriquecer_fornecedores=True,
         )
@@ -147,10 +147,19 @@ class MainTest(unittest.TestCase):
         consultar_pncp.side_effect = pncp.PncpIndisponivelError("PNCP indisponivel")
 
         with self.assertRaises(HTTPException) as contexto:
-            main.pncp_contratacoes(data_inicial="20250101", data_final="20250131")
+            main.pncp_contratacoes(data_inicial="2025-01-01", data_final="2025-01-31")
 
         self.assertEqual(contexto.exception.status_code, 503)
         self.assertEqual(contexto.exception.detail, "PNCP indisponivel")
+
+    def test_endpoints_rejeitam_data_compacta(self) -> None:
+        for endpoint in (main.pncp_contratacoes, main.tce_contratos, main.tce_kpi_me_por_mes):
+            with self.subTest(endpoint=endpoint.__name__):
+                with self.assertRaises(HTTPException) as contexto:
+                    endpoint(data_inicial="20250101", data_final="2025-01-31")
+
+                self.assertEqual(contexto.exception.status_code, 422)
+                self.assertIn("YYYY-MM-DD", contexto.exception.detail)
 
     @patch("app.api.endpoints.pipeline.pncp_incremental.executar_ingestao_incremental_pncp")
     def test_endpoint_pncp_ingestao_incremental_retorna_resumo(self, executar_ingestao) -> None:

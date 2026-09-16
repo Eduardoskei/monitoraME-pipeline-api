@@ -63,7 +63,7 @@ def _agora_utc() -> datetime:
 
 
 def _data_api(valor: datetime) -> str:
-    return _utc(valor).strftime("%Y%m%d")
+    return _utc(valor).strftime("%Y-%m-%d")
 
 
 def montar_escopo_pncp(

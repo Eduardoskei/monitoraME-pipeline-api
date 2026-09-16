@@ -8,6 +8,8 @@ import pandas as pd
 
 VALORES_VAZIOS = (None, "")
 MARCADORES_BANCO_INDISPONIVEL = ("psycopg",)
+DATA_ISO_FORMATO = "YYYY-MM-DD"
+_DATA_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def somente_digitos(valor: Any) -> str:
@@ -134,6 +136,21 @@ def normalizar_data(
             pass
 
     raise ValueError(f"Data invalida: {data!r}. Use {formatos_aceitos}.")
+
+
+def normalizar_data_iso(data: str, formato_saida: str) -> str:
+    """Normaliza uma data recebida obrigatoriamente como YYYY-MM-DD."""
+    if not isinstance(data, str):
+        raise TypeError(f"Data deve ser str, nao {type(data).__name__}.")
+
+    data = data.strip()
+    if not _DATA_ISO_RE.fullmatch(data):
+        raise ValueError(f"Data invalida: {data!r}. Use {DATA_ISO_FORMATO}.")
+
+    try:
+        return datetime.strptime(data, "%Y-%m-%d").strftime(formato_saida)
+    except ValueError as error:
+        raise ValueError(f"Data invalida: {data!r}. Use {DATA_ISO_FORMATO}.") from error
 
 
 _CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")

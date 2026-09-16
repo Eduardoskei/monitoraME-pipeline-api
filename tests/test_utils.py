@@ -42,6 +42,11 @@ class UtilsTest(unittest.TestCase):
             "20250107",
         )
 
+    def test_normalizar_data_iso_rejeita_formato_compacto(self) -> None:
+        self.assertEqual(utils.normalizar_data_iso("2025-01-07", "%Y%m%d"), "20250107")
+        with self.assertRaisesRegex(ValueError, "YYYY-MM-DD"):
+            utils.normalizar_data_iso("20250107", "%Y%m%d")
+
     def test_primeira_coluna_preenchida_ignora_ausentes_nulos_e_marcadores(self) -> None:
         df = pd.DataFrame(
             {

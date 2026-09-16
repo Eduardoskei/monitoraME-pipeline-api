@@ -43,9 +43,10 @@ class PncpIngestionTest(unittest.TestCase):
             [],
         )
 
-    def test_normalizar_data_pncp_aceita_iso_e_compacto(self) -> None:
+    def test_normalizar_data_pncp_aceita_apenas_iso_e_envia_compacto_para_fonte(self) -> None:
         self.assertEqual(pncp.normalizar_data_pncp("2025-01-07"), "20250107")
-        self.assertEqual(pncp.normalizar_data_pncp("20250107"), "20250107")
+        with self.assertRaisesRegex(ValueError, "YYYY-MM-DD"):
+            pncp.normalizar_data_pncp("20250107")
 
     def test_numero_item_usa_campo_oficial(self) -> None:
         self.assertEqual(pncp._numero_item({"numeroItem": "2"}), 2)

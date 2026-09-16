@@ -5,6 +5,7 @@ from app.pipeline import analisys, pncp_incremental
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion.pncp import PncpIndisponivelError
 from app.pipeline.kpis import DadosInsuficientesKPI
+from app.utils import DATA_ISO_FORMATO, normalizar_data_iso
 
 
 router = APIRouter(
@@ -17,6 +18,21 @@ router = APIRouter(
         503: {"description": "Fonte externa indisponivel no momento da consulta."},
     },
 )
+
+DATA_ISO_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
+
+
+def _data_inicial_query():
+    return Query(description=f"Data inicial em {DATA_ISO_FORMATO}.", pattern=DATA_ISO_PATTERN)
+
+
+def _data_final_query():
+    return Query(description=f"Data final em {DATA_ISO_FORMATO}.", pattern=DATA_ISO_PATTERN)
+
+
+def _validar_periodo_api(data_inicial: str, data_final: str) -> None:
+    normalizar_data_iso(data_inicial, "%Y-%m-%d")
+    normalizar_data_iso(data_final, "%Y-%m-%d")
 
 
 def _erro_pipeline(error: Exception) -> HTTPException:
@@ -34,8 +50,8 @@ def _erro_pipeline(error: Exception) -> HTTPException:
     response_description="Tabelas processadas, totais e metadados da consulta PNCP.",
 )
 def pncp_contratacoes(
-    data_inicial: Annotated[str, Query(description="Data inicial em YYYY-MM-DD ou YYYYMMDD.")],
-    data_final: Annotated[str, Query(description="Data final em YYYY-MM-DD ou YYYYMMDD.")],
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
     modalidade_id: Annotated[
         int,
         Query(description="Identificador da modalidade no PNCP.", ge=1),
@@ -74,6 +90,7 @@ def pncp_contratacoes(
     ] = 100,
 ) -> dict[str, object]:
     try:
+        _validar_periodo_api(data_inicial, data_final)
         return analisys.consultar_pncp_contratacoes(
             data_inicial=data_inicial,
             data_final=data_final,
@@ -116,8 +133,8 @@ def pncp_ingestao_incremental(
     response_description="Contratos processados, totais e metadados da consulta TCE-CE.",
 )
 def tce_contratos(
-    data_inicial: Annotated[str, Query(description="Data inicial em YYYY-MM-DD ou YYYYMMDD.")],
-    data_final: Annotated[str, Query(description="Data final em YYYY-MM-DD ou YYYYMMDD.")],
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
     codigo_municipio: Annotated[
         str,
         Query(description="Codigo do municipio no TCE-CE."),
@@ -132,6 +149,7 @@ def tce_contratos(
     ] = 100,
 ) -> dict[str, object]:
     try:
+        _validar_periodo_api(data_inicial, data_final)
         return analisys.consultar_tce_contratos(
             data_inicial=data_inicial,
             data_final=data_final,
@@ -150,8 +168,8 @@ def tce_contratos(
     response_description="Serie mensal do KPI, totais e metadados da consulta TCE-CE.",
 )
 def tce_kpi_me_por_mes(
-    data_inicial: Annotated[str, Query(description="Data inicial em YYYY-MM-DD ou YYYYMMDD.")],
-    data_final: Annotated[str, Query(description="Data final em YYYY-MM-DD ou YYYYMMDD.")],
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
     codigo_municipio: Annotated[
         str,
         Query(description="Codigo do municipio no TCE-CE."),
@@ -162,6 +180,7 @@ def tce_kpi_me_por_mes(
     ] = 100,
 ) -> dict[str, object]:
     try:
+        _validar_periodo_api(data_inicial, data_final)
         return analisys.consultar_kpi_tce_me_por_mes(
             data_inicial=data_inicial,
             data_final=data_final,

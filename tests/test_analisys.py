@@ -135,8 +135,8 @@ class ConsultarTceContratosTest(unittest.TestCase):
         ]
 
         resposta = analisys.consultar_tce_contratos(
-            data_inicial="20250101",
-            data_final="20250131",
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
             codigo_municipio="010",
             enriquecer_fornecedores=True,
             throttle_fornecedores=0,
@@ -199,8 +199,8 @@ class ConsultarKpiTceMePorMesTest(unittest.TestCase):
         ]
 
         resposta = analisys.consultar_kpi_tce_me_por_mes(
-            data_inicial="20250101",
-            data_final="20250131",
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
             codigo_municipio="010",
             throttle_fornecedores=0,
         )
