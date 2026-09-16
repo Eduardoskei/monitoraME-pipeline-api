@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 from typing import Any
 import time
 import requests
@@ -16,6 +17,7 @@ CONSULTA_BASE_URL = PNCP_CONSULTA_BASE_URL
 GESTAO_BASE_URL = PNCP_GESTAO_BASE_URL
 TAMANHO_PAGINA_CONTRATACOES = 50
 TAMANHO_PAGINA_DETALHES = 500
+_ID_PCA_PNCP_RE = re.compile(r"^\s*(\d{14})-\d+-(\d+)/(\d{4})\s*$")
 
 
 class PncpIndisponivelError(RuntimeError):
@@ -127,12 +129,11 @@ def _total_paginas(dados: Any) -> int | None:
     if not isinstance(dados, dict):
         return None
 
-    for chave in ("totalPaginas", "total_pages", "totalPagina", "totalDePaginas"):
-        valor = dados.get(chave)
-        if isinstance(valor, int):
-            return valor
-        if isinstance(valor, str) and valor.isdigit():
-            return int(valor)
+    valor = dados.get("totalPaginas")
+    if isinstance(valor, int):
+        return valor
+    if isinstance(valor, str) and valor.isdigit():
+        return int(valor)
 
     return None
 
@@ -257,27 +258,9 @@ def buscar_pcas_atualizados(
 
 
 def extrair_identificador_compra(registro: dict[str, Any]) -> IdentificadorCompra | None:
-    cnpj = somente_digitos(
-        _primeiro_valor(
-            registro,
-            (
-                ("orgaoEntidade", "cnpj"),
-                ("orgao", "cnpj"),
-                ("cnpjOrgao",),
-                ("cnpj",),
-                ("cnpjOrgaoEntidade",),
-            ),
-        )
-    )
-    ano = _primeiro_valor(registro, (("anoCompra",), ("ano",), ("anoContratacao",)))
-    sequencial = _primeiro_valor(
-        registro,
-        (
-            ("sequencialCompra",),
-            ("sequencial",),
-            ("sequencialContratacao",),
-        ),
-    )
+    cnpj = somente_digitos(_primeiro_valor(registro, (("orgaoEntidade", "cnpj"),)))
+    ano = registro.get("anoCompra")
+    sequencial = registro.get("sequencialCompra")
 
     if len(cnpj) != 14 or ano in (None, "") or sequencial in (None, ""):
         return None
@@ -294,7 +277,13 @@ def extrair_identificador_pca(registro: dict[str, Any]) -> IdentificadorPca | No
     sequencial = registro.get("sequencialPca")
 
     if len(cnpj) != 14 or ano in (None, "") or sequencial in (None, ""):
-        return None
+        id_pca_pncp = registro.get("idPcaPncp")
+        if not isinstance(id_pca_pncp, str):
+            return None
+        match = _ID_PCA_PNCP_RE.match(id_pca_pncp)
+        if not match:
+            return None
+        cnpj, sequencial, ano = match.groups()
 
     try:
         return IdentificadorPca(cnpj, int(ano), int(sequencial))

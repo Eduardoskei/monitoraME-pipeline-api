@@ -7,7 +7,7 @@ from app.core.logging import executar_com_log_ingestao, registrar_falha_ingestao
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, TCE_CE_BASE_URL
 from app.pipeline.ingestion.pagination import LIMITE_REGISTROS_POR_REQUISICAO, listar_por_start_index
 from app.pipeline.naturezas_despesa import codigo_natureza_despesa_monitorado
-from app.utils import normalizar_data, primeiro_valor
+from app.utils import normalizar_data
 
 BASE_URL = TCE_CE_BASE_URL
 TAMANHO_PAGINA = LIMITE_REGISTROS_POR_REQUISICAO
@@ -20,11 +20,6 @@ ENDPOINT_CONTRATOS = "contratos"
 ENDPOINT_CONTRATADOS = "contratados"
 ENDPOINT_ITENS = "itens_compoem_bens_servicos"
 
-_CAMINHOS_CODIGO_ELEMENTO_DESPESA = (
-    ("codigo_elemento_despesa",),
-)
-
-
 def normalizar_data_tce(data: str) -> str:
     return normalizar_data(data, ("%Y-%m-%d", "%Y%m%d"), "%Y-%m-%d", "YYYY-MM-DD ou YYYYMMDD")
 
@@ -33,7 +28,7 @@ def filtrar_naturezas_despesa(registros: list[dict[str, Any]]) -> list[dict[str,
     """Descarta registros cujo codigo de natureza/elemento nao esta no escopo."""
     filtrados: list[dict[str, Any]] = []
     for registro in registros:
-        codigo = primeiro_valor(registro, _CAMINHOS_CODIGO_ELEMENTO_DESPESA)
+        codigo = registro.get("codigo_elemento_despesa")
         if codigo_natureza_despesa_monitorado(codigo):
             filtrados.append(registro)
     return filtrados
@@ -76,7 +71,7 @@ def listar_registros(
     endpoint: str,
     params: dict[str, Any],
     *,
-    filtrar_por_codigo_despesa: bool = True,
+    filtrar_por_codigo_despesa: bool = False,
 ) -> list[dict[str, Any]]:
     def buscar_pagina(start_index: int, tamanho_pagina: int) -> list[Any]:
         pagina = buscar_dados_tce(

@@ -32,6 +32,7 @@ CONTRATACAO_CAMPOS_CONTROLE_TEMPORAL = (
     ("dataAtualizacaoGlobal",),
 )
 PCA_CAMPOS_CONTROLE_TEMPORAL = (
+    ("dataPublicacaoPNCP",),
     ("dataPublicacaoPncp",),
     ("dataAtualizacao",),
     ("dataAtualizacaoGlobalPCA",),
@@ -167,7 +168,10 @@ def _chave_contratacao(registro: dict[str, Any], indice: int) -> tuple[Any, ...]
 
 
 def _chave_pca(registro: dict[str, Any], indice: int) -> tuple[Any, ...]:
-    numero_controle = primeiro_valor(registro, (("numeroControlePNCP",), ("numero_controle_pncp",)))
+    numero_controle = primeiro_valor(
+        registro,
+        (("numeroControlePNCP",), ("idPcaPncp",), ("numero_controle_pncp",), ("id_pca_pncp",)),
+    )
     if numero_controle not in (None, ""):
         return ("numero_controle_pncp", str(numero_controle))
 
@@ -561,6 +565,7 @@ def executar_ingestao_incremental_pncp(
         "campos_controle_temporal": {
             "contratacoes": ["dataPublicacaoPncp", "dataAtualizacao", "dataAtualizacaoGlobal"],
             "pca": [
+                "dataPublicacaoPNCP",
                 "dataPublicacaoPncp",
                 "dataAtualizacao",
                 "dataAtualizacaoGlobalPCA",

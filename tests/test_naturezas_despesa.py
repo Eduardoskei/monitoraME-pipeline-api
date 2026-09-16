@@ -77,7 +77,7 @@ class NaturezasDespesaTest(unittest.TestCase):
             ]
         }
 
-        registros = tce.listar_registros(tce.ENDPOINT_ITENS, {})
+        registros = tce.listar_registros(tce.ENDPOINT_ITENS, {}, filtrar_por_codigo_despesa=True)
 
         self.assertEqual(
             registros,
