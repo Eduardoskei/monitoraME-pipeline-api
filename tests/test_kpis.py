@@ -190,12 +190,12 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
 
         with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
             mock_get.return_value = _fake_response({"elements": registros_contratos})
-            df_contratos = tce_cleaning.limpar(tce.buscar_contratos("20250101", "20250301", codigo_municipio="010"))
+            df_contratos = tce_cleaning.limpar(tce.buscar_contratos("2025-01-01", "2025-03-01", codigo_municipio="010"))
 
         with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
             mock_get.return_value = _fake_response({"elements": registros_contratados})
             df_contratados = tce_cleaning.limpar(
-                tce.buscar_contratados("20250101", "20250301", codigo_municipio="010")
+                tce.buscar_contratados("2025-01-01", "2025-03-01", codigo_municipio="010")
             )
 
         with patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj") as mock_opencnpj:

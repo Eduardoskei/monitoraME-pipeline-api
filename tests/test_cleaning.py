@@ -330,7 +330,7 @@ class LimparTceTest(unittest.TestCase):
         ]
         mock_get.return_value = _fake_response({"elements": registros_brutos})
 
-        registros = tce.buscar_contratos("20250101", "20250301", codigo_municipio="010")
+        registros = tce.buscar_contratos("2025-01-01", "2025-03-01", codigo_municipio="010")
         self.assertEqual(len(registros), 3)  # ingestao real trouxe os 3 registros brutos
 
         df = tce_cleaning.limpar(registros, chave_duplicata=["numero_contrato"])

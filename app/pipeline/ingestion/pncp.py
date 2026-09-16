@@ -8,7 +8,7 @@ from app.core.config import PNCP_CONSULTA_BASE_URL, PNCP_GESTAO_BASE_URL
 from app.pipeline.ingestion.pagination import listar_por_numero_pagina
 from app.utils import (
     filtrar_params_vazios,
-    normalizar_data,
+    normalizar_data_iso,
     primeiro_valor as _primeiro_valor,
     somente_digitos,
 )
@@ -39,7 +39,7 @@ class IdentificadorPca:
 
 
 def normalizar_data_pncp(data: str) -> str:
-    return normalizar_data(data, ("%Y%m%d", "%Y-%m-%d"), "%Y%m%d", "YYYYMMDD ou YYYY-MM-DD")
+    return normalizar_data_iso(data, "%Y%m%d")
 
 
 def _get_json(

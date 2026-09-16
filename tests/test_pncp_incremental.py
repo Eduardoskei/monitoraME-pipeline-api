@@ -206,7 +206,7 @@ class PncpIncrementalTest(unittest.TestCase):
 
         buscar_publicadas.assert_called_once()
         args, kwargs = buscar_publicadas.call_args
-        self.assertEqual(args, ("20260909", "20260909"))
+        self.assertEqual(args, ("2026-09-09", "2026-09-09"))
         self.assertEqual(kwargs["modalidade_id"], 6)
         self.assertEqual(kwargs["uf"], "CE")
         self.assertEqual(kwargs["max_paginas"], 1)

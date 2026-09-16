@@ -25,9 +25,10 @@ from app.pipeline.ingestion import tce
 
 
 class TceIngestionTest(unittest.TestCase):
-    def test_normalizar_data_tce_aceita_formato_compacto(self) -> None:
-        self.assertEqual(tce.normalizar_data_tce("20250107"), "2025-01-07")
+    def test_normalizar_data_tce_aceita_apenas_iso(self) -> None:
         self.assertEqual(tce.normalizar_data_tce("2025-01-07"), "2025-01-07")
+        with self.assertRaisesRegex(ValueError, "YYYY-MM-DD"):
+            tce.normalizar_data_tce("20250107")
 
     def test_normalizar_data_tce_rejeita_tipo_nao_string(self) -> None:
         with self.assertRaises(TypeError):
@@ -157,7 +158,7 @@ class TceIngestionTest(unittest.TestCase):
             {"numero_licitacao": "B", "modalidade_licitacao": "9"},
         ]
 
-        registros = tce.buscar_contratacoes("20250101", "20250107", modalidade="9")
+        registros = tce.buscar_contratacoes("2025-01-01", "2025-01-07", modalidade="9")
 
         self.assertEqual(registros, [{"numero_licitacao": "B", "modalidade_licitacao": "9"}])
         registrar_log_ingestao.assert_called_once()
@@ -174,7 +175,7 @@ class TceIngestionTest(unittest.TestCase):
             {"numero_licitacao": "A", "descricao_objeto_licitacao": "Material de expediente"}
         ]
 
-        registros = tce.buscar_contratacoes("20250101", "20250107")
+        registros = tce.buscar_contratacoes("2025-01-01", "2025-01-07")
 
         self.assertEqual(registros, [{"numero_licitacao": "A", "descricao_objeto_licitacao": "Material de expediente"}])
         self.assertFalse(listar_registros.call_args.kwargs.get("filtrar_por_codigo_despesa", False))
@@ -194,7 +195,7 @@ class TceIngestionTest(unittest.TestCase):
             }
         ]
 
-        registros = tce.buscar_itens_contratacao("20250101", "20250107")
+        registros = tce.buscar_itens_contratacao("2025-01-01", "2025-01-07")
 
         self.assertEqual(
             registros,
@@ -217,7 +218,7 @@ class TceIngestionTest(unittest.TestCase):
     ) -> None:
         listar_registros.return_value = [{"numero_contrato": "2025000123"}]
 
-        registros = tce.buscar_contratos("20250101", "20250131", codigo_municipio="010")
+        registros = tce.buscar_contratos("2025-01-01", "2025-01-31", codigo_municipio="010")
 
         self.assertEqual(registros, [{"numero_contrato": "2025000123"}])
         chamada = registrar_log_ingestao.call_args.kwargs
@@ -241,7 +242,7 @@ class TceIngestionTest(unittest.TestCase):
     ) -> None:
         get.side_effect = requests.ReadTimeout("TCE-CE demorou")
 
-        registros = tce.buscar_contratos("20250101", "20250131", codigo_municipio="010")
+        registros = tce.buscar_contratos("2025-01-01", "2025-01-31", codigo_municipio="010")
 
         self.assertEqual(registros, [])
         chamada = registrar_log_ingestao.call_args.kwargs

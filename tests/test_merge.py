@@ -288,7 +288,7 @@ def _df_tce_contratos() -> pd.DataFrame:
     ]
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
-        registros = tce.buscar_contratos("20250101", "20250301", codigo_municipio="010")
+        registros = tce.buscar_contratos("2025-01-01", "2025-03-01", codigo_municipio="010")
     return tce_cleaning.limpar(registros)
 
 
@@ -306,7 +306,7 @@ def _df_tce_contratados() -> pd.DataFrame:
     ]
     with patch("app.pipeline.ingestion.tce.requests.get") as mock_get:
         mock_get.return_value = _fake_response({"elements": registros_brutos})
-        registros = tce.buscar_contratados("20250101", "20250301", codigo_municipio="010")
+        registros = tce.buscar_contratados("2025-01-01", "2025-03-01", codigo_municipio="010")
     return tce_cleaning.limpar(registros)
 
 
