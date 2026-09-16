@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "nome": "ME",
+    "descricao": "Microempresa. Pessoa jurídica que aufere, em cada ano-calendário, receita bruta igual ou inferior ao limite estabelecido na Lei Complementar nº 123/2006 (atualmente R$ 360.000,00). Tem direito a tratamento diferenciado e favorecido nas contratações públicas.",
+    "dataInclusao": "2021-07-28T09:11:47",
+    "dataAtualizacao": "2026-09-02T11:52:39",
+    "statusAtivo": true
+  },
+  {
+    "id": 2,
+    "nome": "EPP",
+    "descricao": "Empresa de Pequeno Porte. Pessoa jurídica que aufere, em cada ano-calendário, receita bruta superior a R$ 360.000,00 e igual ou inferior ao limite máximo fixado na Lei Complementar nº 123/2006 (atualmente R$ 4.800,000,00). Goza dos benefícios previstos para o tratamento favorecido em licitações.",
+    "dataInclusao": "2021-07-28T09:11:47",
+    "dataAtualizacao": "2026-09-02T11:52:27",
+    "statusAtivo": true
+  },
+  {
+    "id": 3,
+    "nome": "Demais",
+    "descricao": "Categoria destinada às empresas de médio e grande porte ou entes sociais que não se enquadram nos limites de receita bruta nem nos critérios legais da Lei Complementar nº 123/2006, não fazendo jus aos benefícios de preferência conferidos às MPEs.",
+    "dataInclusao": "2021-07-28T09:11:47",
+    "dataAtualizacao": "2026-09-02T11:52:15",
+    "statusAtivo": true
+  },
+  {
+    "id": 4,
+    "nome": "Não se aplica",
+    "descricao": "Opção utilizada quando a identificação do porte empresarial não é pertinente à natureza jurídica do participante ou ao tipo de contratação praticado (como em pessoas físicas, órgãos públicos, entidades estrangeiras sem sede no país ou determinadas modalidades/procedimentos).",
+    "dataInclusao": "2023-03-31T22:41:20",
+    "dataAtualizacao": "2026-09-02T11:52:04",
+    "statusAtivo": true
+  },
+  {
+    "id": 5,
+    "nome": "Não Informado",
+    "descricao": "Indicativo temporário ou cadastral utilizado quando a informação referente ao porte da empresa não foi preenchida, declarada ou integrada pela origem no momento do cadastramento dos dados.",
+    "dataInclusao": "2023-03-31T22:41:20",
+    "dataAtualizacao": "2026-09-02T11:51:51",
+    "statusAtivo": true
+  },
+  {
+    "id": 6,
+    "nome": "MEI",
+    "descricao": "Microempreendedor Individual. Empresário individual com faturamento anual delimitado pela LC nº 123/2006, optante pelo Simples Nacional e pelo SIMEI. Equipara-se à Microempresa para fins de fruição dos benefícios licitatórios.",
+    "dataInclusao": "2026-06-11T19:06:39",
+    "dataAtualizacao": "2026-09-02T11:51:30",
+    "statusAtivo": true
+  }
+]
