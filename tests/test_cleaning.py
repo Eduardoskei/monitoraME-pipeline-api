@@ -654,6 +654,21 @@ class ConverterDatasTimestampTest(unittest.TestCase):
 
         self.assertEqual(resultado["data_x"].tolist(), ["2025-01-15", "2025-01-15T09:30:00"])
 
+    def test_string_timestamp_a_meia_noite_vira_data_sem_horario(self) -> None:
+        df = pd.DataFrame(
+            {
+                "data_x": [
+                    "2026-04-01T00:00:00",
+                    "2026-04-01 00:00:00",
+                    "2026-04-01T09:30:00",
+                ]
+            }
+        )
+
+        resultado = utils.converter_datas(df, ["data_x"])
+
+        self.assertEqual(resultado["data_x"].tolist(), ["2026-04-01", "2026-04-01", "2026-04-01T09:30:00"])
+
 
 class DocumentoValidationTest(unittest.TestCase):
     """Testes de unidade dos validadores de CNPJ/CPF (usados por padronizar_documentos)."""

@@ -151,6 +151,40 @@ class ConsultarTceContratosTest(unittest.TestCase):
         self.assertTrue(registro["fornecedor_elegivel_me"])
         coletar.assert_called_once_with(["11444777000161"], throttle_segundos=0)
 
+    @patch("app.pipeline.analisys.tce.buscar_contratados")
+    @patch("app.pipeline.analisys.tce.buscar_contratos")
+    def test_ordena_contratos_tce_por_data_ascendente_antes_do_limite(self, buscar_contratos, buscar_contratados) -> None:
+        buscar_contratos.return_value = [
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000001",
+                "data_contrato": "2025-01-10",
+            },
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000002",
+                "data_contrato": "2025-02-01",
+            },
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000003",
+                "data_contrato": "2025-01-20",
+            },
+        ]
+        buscar_contratados.return_value = []
+
+        resposta = analisys.consultar_tce_contratos(
+            data_inicial="2025-01-01",
+            data_final="2025-02-28",
+            codigo_municipio="010",
+            limite=2,
+        )
+
+        self.assertEqual(
+            [registro["numero_contrato"] for registro in resposta["dados"]],
+            ["2025000001", "2025000003"],
+        )
+
 
 class ConsultarKpiTceMePorMesTest(unittest.TestCase):
     @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")

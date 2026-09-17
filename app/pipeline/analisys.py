@@ -69,6 +69,30 @@ def _totais_tabelas(tabelas: dict[str, pd.DataFrame]) -> dict[str, int]:
     return {nome: int(len(tabela)) for nome, tabela in tabelas.items()}
 
 
+def _ordenar_tce_contratos_por_data(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "data_contrato" not in df.columns:
+        return df
+
+    coluna_data_ordenacao = "_data_contrato_ordenacao"
+    ordenado = df.copy()
+    ordenado[coluna_data_ordenacao] = pd.to_datetime(ordenado["data_contrato"], errors="coerce", utc=True)
+
+    colunas_ordenacao = [coluna_data_ordenacao]
+    ascendentes = [True]
+    if "numero_contrato" in ordenado.columns:
+        colunas_ordenacao.append("numero_contrato")
+        ascendentes.append(True)
+    if "codigo_municipio" in ordenado.columns:
+        colunas_ordenacao.append("codigo_municipio")
+        ascendentes.append(True)
+
+    return (
+        ordenado.sort_values(colunas_ordenacao, ascending=ascendentes, na_position="last")
+        .drop(columns=[coluna_data_ordenacao])
+        .reset_index(drop=True)
+    )
+
+
 def _contratos_pncp_completos(registros: list[dict[str, Any]]) -> pd.Series | None:
     if not any(isinstance(registro.get("contratos"), list) for registro in registros):
         return None
@@ -202,6 +226,7 @@ def montar_base_tce_contratos(
         fornecedores_df = _coletar_fornecedores(cnpjs, throttle_fornecedores)
 
     base = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)
+    base = _ordenar_tce_contratos_por_data(base)
     metadados = {
         "fonte": "TCE-CE",
         "parametros": {
