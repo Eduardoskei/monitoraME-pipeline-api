@@ -359,25 +359,23 @@ def converter_datas(df: pd.DataFrame, colunas: Iterable[str] | None = None) -> p
         if coluna not in df.columns:
             continue
 
+        def _formatar_sem_fuso(dt: pd.Timestamp) -> str:
+            return dt.strftime("%Y-%m-%d") if dt.time() == dt.time().min else dt.strftime("%Y-%m-%dT%H:%M:%S")
+
         def _para_iso(valor: Any) -> Any:
             if valor is None or (isinstance(valor, float) and pd.isna(valor)):
                 return None
             if isinstance(valor, pd.Timestamp):
                 if valor.tzinfo is not None:
                     return valor.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")
-                return (
-                    valor.strftime("%Y-%m-%d")
-                    if valor.time() == valor.time().min
-                    else valor.strftime("%Y-%m-%dT%H:%M:%S")
-                )
+                return _formatar_sem_fuso(valor)
             texto = str(valor).strip()
             if texto == "":
                 return None
             for formato in formatos:
                 try:
                     dt = pd.to_datetime(texto, format=formato)
-                    tem_hora = "%H" in formato
-                    return dt.strftime("%Y-%m-%dT%H:%M:%S") if tem_hora else dt.strftime("%Y-%m-%d")
+                    return _formatar_sem_fuso(dt)
                 except ValueError:
                     continue
             try:
@@ -386,7 +384,7 @@ def converter_datas(df: pd.DataFrame, colunas: Iterable[str] | None = None) -> p
                 return None
             if dt.tzinfo is not None:
                 return dt.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")
-            return dt.strftime("%Y-%m-%d") if dt.time() == dt.time().min else dt.strftime("%Y-%m-%dT%H:%M:%S")
+            return _formatar_sem_fuso(dt)
 
         df[coluna] = df[coluna].map(_para_iso)
 
