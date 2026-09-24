@@ -189,3 +189,41 @@ def tce_kpi_me_por_mes(
         )
     except Exception as error:
         raise _erro_pipeline(error) from error
+
+
+@router.get(
+    "/tce/analitico/indicadores",
+    summary="Calcula indicadores analiticos principais do TCE-CE",
+    description=(
+        "Calcula os principais indicadores analiticos sobre a base canonica do TCE-CE. "
+        "O municipio comprador e resolvido automaticamente pelo codigo interno do TCE-CE."
+    ),
+    response_description="Indicadores analiticos, totais e metadados da consulta TCE-CE.",
+)
+def tce_analitico_indicadores(
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
+    codigo_municipio: Annotated[
+        str,
+        Query(description="Codigo do municipio no TCE-CE."),
+    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
+    limite_ranking: Annotated[
+        int,
+        Query(description="Quantidade maxima de fornecedores no ranking.", ge=1, le=100),
+    ] = 10,
+    limite: Annotated[
+        int | None,
+        Query(description="Limite de registros por tabela de indicador retornada.", ge=1, le=1000),
+    ] = 100,
+) -> dict[str, object]:
+    try:
+        _validar_periodo_api(data_inicial, data_final)
+        return analisys.consultar_tce_indicadores_analiticos(
+            data_inicial=data_inicial,
+            data_final=data_final,
+            codigo_municipio=codigo_municipio,
+            limite_ranking=limite_ranking,
+            limite=limite,
+        )
+    except Exception as error:
+        raise _erro_pipeline(error) from error

@@ -84,6 +84,7 @@ class MainTest(unittest.TestCase):
         self.assertIn("/pipeline/pncp/ingestao-incremental", rotas)
         self.assertIn("/pipeline/tce/contratos", rotas)
         self.assertIn("/pipeline/tce/kpis/me-por-mes", rotas)
+        self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
 
     @patch("app.main.database.close_pool")
     @patch("app.main.database.init_db")
@@ -137,6 +138,39 @@ class MainTest(unittest.TestCase):
 
     @patch("app.main.database.close_pool")
     @patch("app.main.database.init_db")
+    @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
+    def test_endpoint_tce_analitico_indicadores_retorna_fluxo_serializado(
+        self,
+        consultar_indicadores,
+        _init_db,
+        _close_pool,
+    ) -> None:
+        consultar_indicadores.return_value = {
+            "fonte": "TCE-CE",
+            "kpi": "indicadores_analiticos_principais",
+            "totais": {"resumo_geral": 1},
+            "indicadores": {"resumo_geral": [{"valor_total": 1000.0}]},
+        }
+
+        payload = main.tce_analitico_indicadores(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+            limite_ranking=5,
+        )
+
+        consultar_indicadores.assert_called_once_with(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+            limite_ranking=5,
+            limite=100,
+        )
+        self.assertEqual(payload["kpi"], "indicadores_analiticos_principais")
+        self.assertEqual(payload["indicadores"]["resumo_geral"][0]["valor_total"], 1000.0)
+
+    @patch("app.main.database.close_pool")
+    @patch("app.main.database.init_db")
     @patch("app.main.analisys.consultar_pncp_contratacoes")
     def test_endpoint_pncp_mapeia_fonte_indisponivel_para_503(
         self,
@@ -153,7 +187,12 @@ class MainTest(unittest.TestCase):
         self.assertEqual(contexto.exception.detail, "PNCP indisponivel")
 
     def test_endpoints_rejeitam_data_compacta(self) -> None:
-        for endpoint in (main.pncp_contratacoes, main.tce_contratos, main.tce_kpi_me_por_mes):
+        for endpoint in (
+            main.pncp_contratacoes,
+            main.tce_contratos,
+            main.tce_kpi_me_por_mes,
+            main.tce_analitico_indicadores,
+        ):
             with self.subTest(endpoint=endpoint.__name__):
                 with self.assertRaises(HTTPException) as contexto:
                     endpoint(data_inicial="20250101", data_final="2025-01-31")

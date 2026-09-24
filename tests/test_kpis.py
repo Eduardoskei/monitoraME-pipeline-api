@@ -102,6 +102,108 @@ class CalcularParticipacaoMeTest(unittest.TestCase):
         self.assertEqual(len(resultado), 2)
 
 
+class CalcularIndicadoresAnaliticosPrincipaisTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 10000.0,
+                    "cnpj_fornecedor": "11444777000161",
+                    "nome_fornecedor": "Comercio Local LTDA",
+                    "porte_fornecedor": "ME",
+                    "fornecedor_e_me": True,
+                    "fornecedor_e_mpe": True,
+                    "natureza_despesa_codigo": "30",
+                    "natureza_despesa": "Material de consumo",
+                    "origem_geografica": "Sediado no município comprador",
+                    "municipio_sede_fornecedor": "AMONTADA",
+                    "uf_sede_fornecedor": "CE",
+                },
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 20000.0,
+                    "cnpj_fornecedor": "98765432000111",
+                    "nome_fornecedor": "Fornecedor EPP SA",
+                    "porte_fornecedor": "EPP",
+                    "fornecedor_e_me": False,
+                    "fornecedor_e_mpe": True,
+                    "natureza_despesa_codigo": "39",
+                    "natureza_despesa": "Outros servicos de terceiros - pessoa juridica",
+                    "origem_geografica": "Outro município do Ceará",
+                    "municipio_sede_fornecedor": "FORTALEZA",
+                    "uf_sede_fornecedor": "CE",
+                },
+                {
+                    "ano_mes": "2025-02",
+                    "valor": 5000.0,
+                    "cnpj_fornecedor": "55555555000155",
+                    "nome_fornecedor": "Fornecedor Nacional SA",
+                    "porte_fornecedor": "DEMAIS",
+                    "fornecedor_e_me": False,
+                    "fornecedor_e_mpe": False,
+                    "natureza_despesa_codigo": "30",
+                    "natureza_despesa": "Material de consumo",
+                    "origem_geografica": "Fora do estado",
+                    "municipio_sede_fornecedor": "SAO PAULO",
+                    "uf_sede_fornecedor": "SP",
+                },
+                {
+                    "ano_mes": "2025-02",
+                    "valor": None,
+                    "cnpj_fornecedor": None,
+                    "nome_fornecedor": "Fornecedor sem valor",
+                    "porte_fornecedor": "NAO_IDENTIFICADO",
+                    "fornecedor_e_me": False,
+                    "fornecedor_e_mpe": False,
+                    "natureza_despesa_codigo": "30",
+                    "natureza_despesa": "Material de consumo",
+                    "origem_geografica": "Nao identificada",
+                    "municipio_sede_fornecedor": None,
+                    "uf_sede_fornecedor": None,
+                },
+            ]
+        )
+
+    def test_calcula_resumo_series_distribuicoes_e_ranking(self) -> None:
+        indicadores = kpis.calcular_indicadores_analiticos_principais(self.base, limite_ranking=2)
+
+        self.assertEqual(set(indicadores), set(kpis.INDICADORES_ANALITICOS_PRINCIPAIS))
+
+        resumo = indicadores["resumo_geral"].iloc[0]
+        self.assertEqual(resumo["total_registros"], 4)
+        self.assertEqual(resumo["total_fornecedores"], 3)
+        self.assertEqual(resumo["registros_sem_valor"], 1)
+        self.assertEqual(resumo["valor_total"], 35000.0)
+        self.assertEqual(resumo["valor_me"], 10000.0)
+        self.assertAlmostEqual(resumo["percentual_me"], 10000.0 / 35000.0)
+        self.assertEqual(resumo["valor_mpe"], 30000.0)
+        self.assertAlmostEqual(resumo["percentual_mpe"], 30000.0 / 35000.0)
+        self.assertEqual(resumo["valor_fornecedor_local"], 10000.0)
+
+        serie = indicadores["serie_mensal"].set_index("ano_mes")
+        self.assertEqual(serie.loc["2025-01", "valor_total"], 30000.0)
+        self.assertEqual(serie.loc["2025-01", "valor_mpe"], 30000.0)
+        self.assertEqual(serie.loc["2025-02", "valor_total"], 5000.0)
+
+        naturezas = indicadores["por_natureza_despesa"].set_index("natureza_despesa_codigo")
+        self.assertEqual(naturezas.loc["30", "registros"], 3)
+        self.assertEqual(naturezas.loc["30", "valor_total"], 15000.0)
+
+        ranking = indicadores["ranking_fornecedores"]
+        self.assertEqual(len(ranking), 2)
+        self.assertEqual(ranking.iloc[0]["cnpj_fornecedor"], "98765432000111")
+        self.assertEqual(ranking.iloc[0]["valor_total"], 20000.0)
+
+    def test_recusa_base_sem_colunas_canonicas(self) -> None:
+        with self.assertRaisesRegex(kpis.DadosInsuficientesKPI, "base analitica"):
+            kpis.calcular_indicadores_analiticos_principais(pd.DataFrame([{"valor": 100.0}]))
+
+    def test_recusa_limite_ranking_invalido(self) -> None:
+        with self.assertRaisesRegex(ValueError, "limite_ranking"):
+            kpis.calcular_indicadores_analiticos_principais(self.base, limite_ranking=0)
+
+
 class CalcularParticipacaoMeLocalTest(unittest.TestCase):
     def setUp(self) -> None:
         self.licitacoes = pd.DataFrame([

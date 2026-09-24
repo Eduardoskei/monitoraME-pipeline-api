@@ -1,7 +1,7 @@
 from typing import Any
 import pandas as pd
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import kpis, merge, pncp_incremental
+from app.pipeline import analitico, kpis, merge, pncp_incremental
 from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
@@ -90,6 +90,24 @@ def _ordenar_tce_contratos_por_data(df: pd.DataFrame) -> pd.DataFrame:
         ordenado.sort_values(colunas_ordenacao, ascending=ascendentes, na_position="last")
         .drop(columns=[coluna_data_ordenacao])
         .reset_index(drop=True)
+    )
+
+
+def _resolver_nome_municipio_tce(codigo_municipio: str) -> str:
+    municipios = tce.buscar_municipios()
+    codigo_procurado = str(codigo_municipio).strip()
+
+    for municipio in municipios:
+        codigo = str(municipio.get("codigo_municipio", "")).strip()
+        if codigo != codigo_procurado:
+            continue
+
+        nome = municipio.get("nome_municipio") or municipio.get("nome") or municipio.get("municipio")
+        if isinstance(nome, str) and nome.strip():
+            return nome.strip()
+
+    raise kpis.DadosInsuficientesKPI(
+        f"[INDISPONIVEL] Nao foi possivel resolver o municipio TCE pelo codigo {codigo_municipio}."
     )
 
 
@@ -250,6 +268,98 @@ def consultar_tce_contratos(*, limite: int | None = 100, **kwargs: Any) -> dict[
         "limite_resposta": limite,
         "totais": {"contratos": int(len(base))},
         "dados": dataframe_para_registros(base, limite=limite),
+    }
+
+
+def montar_base_analitica_tce(
+    data_inicial: str,
+    data_final: str,
+    *,
+    codigo_municipio: str = CODIGO_MUNICIPIO_TCE_PADRAO,
+    municipio_comprador: str | None = None,
+    throttle_fornecedores: float = 0.3,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    municipio_comprador = municipio_comprador or _resolver_nome_municipio_tce(codigo_municipio)
+    base, metadados = montar_base_tce_contratos(
+        data_inicial,
+        data_final,
+        codigo_municipio=codigo_municipio,
+        enriquecer_fornecedores=True,
+        throttle_fornecedores=throttle_fornecedores,
+    )
+    base_analitica = analitico.montar_base_analitica_tce(
+        base,
+        codigo_municipio=codigo_municipio,
+        municipio_comprador=municipio_comprador,
+        uf_comprador=UF_PADRAO,
+    )
+    metadados = {
+        **metadados,
+        "base_analitica": {
+            "nome": "tce_contratos",
+            "municipio_comprador": municipio_comprador,
+            "colunas": list(analitico.COLUNAS_BASE_ANALITICA_TCE),
+        },
+    }
+    return base_analitica, metadados
+
+
+def consultar_tce_base_analitica(*, limite: int | None = 100, **kwargs: Any) -> dict[str, Any]:
+    base, metadados = montar_base_analitica_tce(**kwargs)
+    return {
+        **metadados,
+        "limite_resposta": limite,
+        "totais": {"registros": int(len(base))},
+        "dados": dataframe_para_registros(base, limite=limite),
+    }
+
+
+def montar_indicadores_analiticos_tce(
+    data_inicial: str,
+    data_final: str,
+    *,
+    codigo_municipio: str = CODIGO_MUNICIPIO_TCE_PADRAO,
+    municipio_comprador: str | None = None,
+    throttle_fornecedores: float = 0.3,
+    limite_ranking: int = 10,
+) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
+    base, metadados = montar_base_analitica_tce(
+        data_inicial,
+        data_final,
+        codigo_municipio=codigo_municipio,
+        municipio_comprador=municipio_comprador,
+        throttle_fornecedores=throttle_fornecedores,
+    )
+    indicadores = kpis.calcular_indicadores_analiticos_principais(
+        base,
+        limite_ranking=limite_ranking,
+    )
+    metadados = {
+        **metadados,
+        "indicadores_analiticos": {
+            "escopo": "principais",
+            "nomes": list(kpis.INDICADORES_ANALITICOS_PRINCIPAIS),
+        },
+    }
+    return indicadores, metadados
+
+
+def consultar_tce_indicadores_analiticos(
+    *,
+    limite: int | None = 100,
+    limite_ranking: int = 10,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    indicadores, metadados = montar_indicadores_analiticos_tce(
+        **kwargs,
+        limite_ranking=limite_ranking,
+    )
+    return {
+        **metadados,
+        "limite_resposta": limite,
+        "kpi": "indicadores_analiticos_principais",
+        "totais": _totais_tabelas(indicadores),
+        "indicadores": tabelas_para_json(indicadores, limite=limite),
     }
 
 

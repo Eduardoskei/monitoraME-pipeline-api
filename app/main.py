@@ -6,6 +6,7 @@ from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
     pncp_ingestao_incremental,
     pncp_contratacoes,
+    tce_analitico_indicadores,
     tce_contratos,
     tce_kpi_me_por_mes,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "lifespan",
     "pncp_ingestao_incremental",
     "pncp_contratacoes",
+    "tce_analitico_indicadores",
     "tce_contratos",
     "tce_kpi_me_por_mes",
 ]
