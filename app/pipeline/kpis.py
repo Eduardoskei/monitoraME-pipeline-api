@@ -25,12 +25,215 @@ class DadosInsuficientesKPI(ValueError):
     """O KPI nao pode ser calculado sem inventar ou reinterpretar dados."""
 
 
+ORIGEM_FORNECEDOR_LOCAL = "Sediado no município comprador"
+
+INDICADORES_ANALITICOS_PRINCIPAIS = (
+    "resumo_geral",
+    "serie_mensal",
+    "por_origem_geografica",
+    "por_porte_fornecedor",
+    "por_natureza_despesa",
+    "ranking_fornecedores",
+)
+
+
 def _validar_colunas(df: pd.DataFrame, colunas: list[str], origem: str) -> None:
     ausentes = [coluna for coluna in colunas if coluna not in df.columns]
     if ausentes:
         raise DadosInsuficientesKPI(
             f"[INDISPONIVEL] {origem}: campos necessarios nao existem: {', '.join(ausentes)}"
         )
+
+
+def _soma_valor(serie: pd.Series) -> object:
+    if serie.empty:
+        return 0.0
+    soma = serie.sum(min_count=1)
+    return soma if pd.notna(soma) else pd.NA
+
+
+def _percentual_valor(numerador: object, denominador: object) -> object:
+    if pd.isna(numerador) or pd.isna(denominador) or float(denominador) == 0:
+        return pd.NA
+    return float(numerador) / float(denominador)
+
+
+def _booleano_estrito(serie: pd.Series) -> pd.Series:
+    return serie.map(lambda valor: bool(valor) if pd.notna(valor) else False)
+
+
+def _preparar_base_analitica(df: pd.DataFrame) -> pd.DataFrame:
+    colunas_obrigatorias = [
+        "ano_mes",
+        "valor",
+        "cnpj_fornecedor",
+        "nome_fornecedor",
+        "porte_fornecedor",
+        "fornecedor_e_me",
+        "fornecedor_e_mpe",
+        "natureza_despesa_codigo",
+        "natureza_despesa",
+        "origem_geografica",
+        "municipio_sede_fornecedor",
+        "uf_sede_fornecedor",
+    ]
+    _validar_colunas(df, colunas_obrigatorias, "base analitica")
+
+    if df.empty:
+        raise DadosInsuficientesKPI("[INDISPONIVEL] base analitica sem registros.")
+
+    base = df.copy()
+    base["_valor_indicador"] = pd.to_numeric(base["valor"], errors="coerce")
+    base["_fornecedor_e_me"] = _booleano_estrito(base["fornecedor_e_me"])
+    base["_fornecedor_e_mpe"] = _booleano_estrito(base["fornecedor_e_mpe"])
+    base["_fornecedor_local"] = base["origem_geografica"].eq(ORIGEM_FORNECEDOR_LOCAL)
+    return base
+
+
+def _agregar_por_grupo(
+    base: pd.DataFrame,
+    colunas_grupo: list[str],
+    *,
+    valor_total_base: object,
+    ordenar_por_valor: bool = True,
+) -> pd.DataFrame:
+    agrupado = (
+        base.groupby(colunas_grupo, dropna=False)
+        .agg(
+            registros=("valor", "size"),
+            valor_total=("_valor_indicador", _soma_valor),
+        )
+        .reset_index()
+    )
+    agrupado["percentual_valor"] = agrupado["valor_total"].map(
+        lambda valor: _percentual_valor(valor, valor_total_base)
+    )
+
+    if ordenar_por_valor:
+        agrupado = (
+            agrupado.assign(_valor_ordenacao=pd.to_numeric(agrupado["valor_total"], errors="coerce").fillna(-1))
+            .sort_values(["_valor_ordenacao", "registros"], ascending=[False, False])
+            .drop(columns=["_valor_ordenacao"])
+        )
+    else:
+        agrupado = agrupado.sort_values(colunas_grupo, na_position="last")
+
+    return agrupado.reset_index(drop=True)
+
+
+def _soma_valor_marcado(base: pd.DataFrame, valores: pd.Series, coluna_marcador: str) -> object:
+    marcador = base.loc[valores.index, coluna_marcador]
+    return _soma_valor(valores[marcador])
+
+
+def _serie_mensal(base: pd.DataFrame) -> pd.DataFrame:
+    serie = (
+        base.groupby("ano_mes", dropna=False)
+        .agg(
+            registros=("valor", "size"),
+            valor_total=("_valor_indicador", _soma_valor),
+            valor_me=(
+                "_valor_indicador",
+                lambda valores: _soma_valor_marcado(base, valores, "_fornecedor_e_me"),
+            ),
+            valor_mpe=(
+                "_valor_indicador",
+                lambda valores: _soma_valor_marcado(base, valores, "_fornecedor_e_mpe"),
+            ),
+            valor_fornecedor_local=(
+                "_valor_indicador",
+                lambda valores: _soma_valor_marcado(base, valores, "_fornecedor_local"),
+            ),
+        )
+        .reset_index()
+        .sort_values("ano_mes", na_position="last")
+        .reset_index(drop=True)
+    )
+    serie["percentual_me"] = serie.apply(
+        lambda linha: _percentual_valor(linha["valor_me"], linha["valor_total"]),
+        axis=1,
+    )
+    serie["percentual_mpe"] = serie.apply(
+        lambda linha: _percentual_valor(linha["valor_mpe"], linha["valor_total"]),
+        axis=1,
+    )
+    serie["percentual_fornecedor_local"] = serie.apply(
+        lambda linha: _percentual_valor(linha["valor_fornecedor_local"], linha["valor_total"]),
+        axis=1,
+    )
+    return serie
+
+
+def calcular_indicadores_analiticos_principais(
+    base_analitica: pd.DataFrame,
+    *,
+    limite_ranking: int = 10,
+) -> dict[str, pd.DataFrame]:
+    """Calcula os principais indicadores sobre a base analitica canonica.
+
+    A funcao nao tenta descobrir colunas equivalentes: ela exige os nomes
+    canonicos produzidos por ``app.pipeline.analitico``. Assim, um indicador so
+    e calculado quando a base carrega explicitamente o dado necessario.
+    """
+    if limite_ranking < 1:
+        raise ValueError("limite_ranking deve ser maior ou igual a 1.")
+
+    base = _preparar_base_analitica(base_analitica)
+    valor_total = _soma_valor(base["_valor_indicador"])
+    valor_me = _soma_valor(base.loc[base["_fornecedor_e_me"], "_valor_indicador"])
+    valor_mpe = _soma_valor(base.loc[base["_fornecedor_e_mpe"], "_valor_indicador"])
+    valor_local = _soma_valor(base.loc[base["_fornecedor_local"], "_valor_indicador"])
+
+    resumo_geral = pd.DataFrame(
+        [
+            {
+                "total_registros": int(len(base)),
+                "total_fornecedores": int(base["cnpj_fornecedor"].dropna().nunique()),
+                "registros_sem_valor": int(base["_valor_indicador"].isna().sum()),
+                "valor_total": valor_total,
+                "valor_me": valor_me,
+                "percentual_me": _percentual_valor(valor_me, valor_total),
+                "valor_mpe": valor_mpe,
+                "percentual_mpe": _percentual_valor(valor_mpe, valor_total),
+                "valor_fornecedor_local": valor_local,
+                "percentual_fornecedor_local": _percentual_valor(valor_local, valor_total),
+            }
+        ]
+    )
+
+    ranking_fornecedores = _agregar_por_grupo(
+        base,
+        [
+            "cnpj_fornecedor",
+            "nome_fornecedor",
+            "porte_fornecedor",
+            "municipio_sede_fornecedor",
+            "uf_sede_fornecedor",
+            "origem_geografica",
+        ],
+        valor_total_base=valor_total,
+    ).head(limite_ranking)
+
+    return {
+        "resumo_geral": resumo_geral,
+        "serie_mensal": _serie_mensal(base),
+        "por_origem_geografica": _agregar_por_grupo(
+            base,
+            ["origem_geografica"],
+            valor_total_base=valor_total,
+        ),
+        "por_porte_fornecedor": _agregar_por_grupo(
+            base,
+            ["porte_fornecedor"],
+            valor_total_base=valor_total,
+        ),
+        "por_natureza_despesa": _agregar_por_grupo(
+            base,
+            ["natureza_despesa_codigo", "natureza_despesa"],
+            valor_total_base=valor_total,
+        ),
+        "ranking_fornecedores": ranking_fornecedores.reset_index(drop=True),
+    }
 
 
 def _eh_me_estrita(valor: object) -> bool:
