@@ -18,14 +18,22 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.pipeline.cleaners.opencnpj import normalizar_porte_empresarial
 from app.utils import normalizar_chave_entidade, normalizar_cnpj
-
 
 class DadosInsuficientesKPI(ValueError):
     """O KPI nao pode ser calculado sem inventar ou reinterpretar dados."""
 
 
 ORIGEM_FORNECEDOR_LOCAL = "Sediado no município comprador"
+
+PORTES_EMPRESARIAIS = (
+    "MEI",
+    "ME",
+    "EPP",
+    "DEMAIS",
+    "NAO_IDENTIFICADO",
+)
 
 INDICADORES_ANALITICOS_PRINCIPAIS = (
     "resumo_geral",
@@ -420,9 +428,160 @@ def calcular_participacao_me_por_mes(
     """Atalho de `calcular_participacao_me` agrupando por mes (`extrair_ano_mes`)."""
     df = df.copy()
     df["ano_mes"] = extrair_ano_mes(df[coluna_data])
+
     return calcular_participacao_me(
         df,
         colunas_agrupamento=["ano_mes"],
         coluna_valor=coluna_valor,
         coluna_elegivel_me=coluna_elegivel_me,
+    )
+
+
+def calcular_participacao_por_porte(
+    df: pd.DataFrame,
+    *,
+    colunas_agrupamento: list[str],
+    coluna_valor: str,
+    coluna_porte: str = "fornecedor_porte_padronizado",
+) -> pd.DataFrame:
+    """Calcula quantidade, valor e participação por porte empresarial."""
+    colunas_resultado = [
+        *colunas_agrupamento,
+        "porte",
+        "total_contratos",
+        "quantidade_contratos",
+        "total_compras",
+        "valor_porte",
+        "percentual_contratos",
+        "percentual_valor",
+    ]
+
+    if not colunas_agrupamento:
+        raise DadosInsuficientesKPI(
+            "[INDISPONIVEL] participacao por porte: "
+            "informe ao menos uma coluna de agrupamento."
+        )
+
+    if df.empty:
+        return pd.DataFrame(columns=colunas_resultado)
+
+    _validar_colunas(
+        df,
+        [*colunas_agrupamento, coluna_valor],
+        "participacao por porte",
+    )
+
+    base = df[[*colunas_agrupamento, coluna_valor]].copy()
+
+    if coluna_porte in df.columns:
+        base[coluna_porte] = df[coluna_porte]
+    else:
+        base[coluna_porte] = pd.NA
+
+    base["porte"] = (
+        base[coluna_porte]
+        .map(normalizar_porte_empresarial)
+        .fillna("NAO_IDENTIFICADO")
+    )
+
+    totais = (
+        base.groupby(colunas_agrupamento, dropna=False)
+        .agg(
+            total_contratos=(coluna_valor, "size"),
+            total_compras=(coluna_valor, "sum"),
+        )
+        .reset_index()
+    )
+
+    por_porte = (
+        base.groupby(
+            [*colunas_agrupamento, "porte"],
+            dropna=False,
+        )
+        .agg(
+            quantidade_contratos=(coluna_valor, "size"),
+            valor_porte=(coluna_valor, "sum"),
+        )
+        .reset_index()
+    )
+
+    grupos = totais[colunas_agrupamento].drop_duplicates().copy()
+    categorias = pd.DataFrame({"porte": list(PORTES_EMPRESARIAIS)})
+
+    grupos["_chave_cruzamento"] = 1
+    categorias["_chave_cruzamento"] = 1
+
+    grade = grupos.merge(
+        categorias,
+        on="_chave_cruzamento",
+    ).drop(columns="_chave_cruzamento")
+
+    resultado = grade.merge(
+        por_porte,
+        on=[*colunas_agrupamento, "porte"],
+        how="left",
+    )
+
+    resultado = resultado.merge(
+        totais,
+        on=colunas_agrupamento,
+        how="left",
+    )
+
+    resultado["quantidade_contratos"] = (
+        resultado["quantidade_contratos"]
+        .fillna(0)
+        .astype(int)
+    )
+    resultado["valor_porte"] = resultado["valor_porte"].fillna(0)
+
+    resultado["percentual_contratos"] = (
+        resultado["quantidade_contratos"]
+        / resultado["total_contratos"]
+    ).where(resultado["total_contratos"] != 0)
+
+    resultado["percentual_valor"] = (
+        resultado["valor_porte"]
+        / resultado["total_compras"]
+    ).where(resultado["total_compras"] != 0)
+
+    return resultado[colunas_resultado]
+
+
+def calcular_participacao_por_porte_por_mes(
+    df: pd.DataFrame,
+    *,
+    coluna_data: str,
+    coluna_valor: str,
+    coluna_porte: str = "fornecedor_porte_padronizado",
+) -> pd.DataFrame:
+    """Calcula a participação dos portes empresariais por mês."""
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "ano_mes",
+                "porte",
+                "total_contratos",
+                "quantidade_contratos",
+                "total_compras",
+                "valor_porte",
+                "percentual_contratos",
+                "percentual_valor",
+            ]
+        )
+
+    _validar_colunas(
+        df,
+        [coluna_data, coluna_valor],
+        "participacao por porte por mes",
+    )
+
+    base = df.copy()
+    base["ano_mes"] = extrair_ano_mes(base[coluna_data])
+
+    return calcular_participacao_por_porte(
+        base,
+        colunas_agrupamento=["ano_mes"],
+        coluna_valor=coluna_valor,
+        coluna_porte=coluna_porte,
     )
