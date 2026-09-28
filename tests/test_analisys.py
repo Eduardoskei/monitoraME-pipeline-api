@@ -22,7 +22,7 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import analisys
+from app.pipeline import analisys, kpis
 
 
 class SerializacaoJsonTest(unittest.TestCase):
@@ -475,6 +475,73 @@ class ConsultarKpiTceMePorMesTest(unittest.TestCase):
         self.assertEqual(resposta["dados"][0]["ano_mes"], "2025-01")
         self.assertEqual(resposta["dados"][0]["total_compras"], 15000.0)
         self.assertEqual(resposta["dados"][0]["valor_me"], 10000.0)
+
+
+class ConsultarKpiTcePortesPorMesTest(unittest.TestCase):
+    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
+    @patch("app.pipeline.analisys.tce.buscar_contratados")
+    @patch("app.pipeline.analisys.tce.buscar_contratos")
+    def test_calcula_kpi_por_porte_a_partir_do_fluxo_tce(
+        self, buscar_contratos, buscar_contratados, coletar
+    ) -> None:
+        buscar_contratos.return_value = [
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000123",
+                "data_contrato": "2025-01-15",
+                "valor_total_contrato": "10.000,00",
+            },
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000456",
+                "data_contrato": "2025-01-20",
+                "valor_total_contrato": "5.000,00",
+            },
+        ]
+        buscar_contratados.return_value = [
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000123",
+                "numero_documento_negociante": "11.444.777/0001-61",
+            },
+            {
+                "codigo_municipio": "010",
+                "numero_contrato": "2025000456",
+                "numero_documento_negociante": "98.765.432/0001-11",
+            },
+        ]
+        coletar.return_value = [
+            {
+                "cnpj": "11444777000161",
+                "opencnpj": {"porte_empresa": "MICRO EMPRESA"},
+                "porte": "MICRO EMPRESA",
+                "opencnpj_status": "ok",
+            },
+            {
+                "cnpj": "98765432000111",
+                "opencnpj": {"porte_empresa": "EMPRESA DE PEQUENO PORTE"},
+                "porte": "EMPRESA DE PEQUENO PORTE",
+                "opencnpj_status": "ok",
+            },
+        ]
+
+        resposta = analisys.consultar_kpi_tce_portes_por_mes(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+            throttle_fornecedores=0,
+        )
+
+        self.assertEqual(resposta["kpi"], "participacao_por_porte_por_mes")
+        self.assertEqual(
+            resposta["totais"],
+            {"contratos": 2, "registros_kpi": len(kpis.PORTES_EMPRESARIAIS)},
+        )
+        por_porte = {registro["porte"]: registro for registro in resposta["dados"]}
+        self.assertEqual(por_porte["ME"]["valor_porte"], 10000.0)
+        self.assertAlmostEqual(por_porte["ME"]["percentual_valor"], 2 / 3)
+        self.assertEqual(por_porte["EPP"]["valor_porte"], 5000.0)
+        self.assertAlmostEqual(por_porte["EPP"]["percentual_valor"], 1 / 3)
 
 
 if __name__ == "__main__":

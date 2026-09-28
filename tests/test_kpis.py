@@ -327,5 +327,72 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
         self.assertEqual(por_mes.loc["2025-02", "percentual_me"], 0.0)
 
 
+class ParticipacaoPorPortePorMesTest(unittest.TestCase):
+    def test_calcula_grade_completa_valores_e_percentuais_por_porte(self) -> None:
+        base = pd.DataFrame(
+            [
+                {"data": "2025-01-10", "valor": 100.0, "porte": "MICRO EMPRESA"},
+                {"data": "2025-01-11", "valor": 300.0, "porte": "EMPRESA DE PEQUENO PORTE"},
+                {"data": "2025-01-12", "valor": 100.0, "porte": None},
+                {"data": "2025-02-01", "valor": 0.0, "porte": "MEI"},
+            ]
+        )
+
+        resultado = kpis.calcular_participacao_por_porte_por_mes(
+            base,
+            coluna_data="data",
+            coluna_valor="valor",
+            coluna_porte="porte",
+        )
+        por_mes_porte = resultado.set_index(["ano_mes", "porte"])
+
+        self.assertEqual(len(resultado), 2 * len(kpis.PORTES_EMPRESARIAIS))
+        self.assertEqual(por_mes_porte.loc[("2025-01", "ME"), "total_contratos"], 3)
+        self.assertEqual(por_mes_porte.loc[("2025-01", "ME"), "quantidade_contratos"], 1)
+        self.assertEqual(por_mes_porte.loc[("2025-01", "ME"), "total_compras"], 500.0)
+        self.assertEqual(por_mes_porte.loc[("2025-01", "ME"), "valor_porte"], 100.0)
+        self.assertAlmostEqual(por_mes_porte.loc[("2025-01", "ME"), "percentual_contratos"], 1 / 3)
+        self.assertEqual(por_mes_porte.loc[("2025-01", "ME"), "percentual_valor"], 0.2)
+        self.assertEqual(por_mes_porte.loc[("2025-01", "EPP"), "percentual_valor"], 0.6)
+        self.assertEqual(
+            por_mes_porte.loc[("2025-01", "NAO_IDENTIFICADO"), "percentual_valor"],
+            0.2,
+        )
+        self.assertEqual(por_mes_porte.loc[("2025-01", "MEI"), "quantidade_contratos"], 0)
+        self.assertTrue(pd.isna(por_mes_porte.loc[("2025-02", "MEI"), "percentual_valor"]))
+
+    def test_classifica_todos_como_nao_identificado_quando_coluna_porte_nao_existe(self) -> None:
+        resultado = kpis.calcular_participacao_por_porte_por_mes(
+            pd.DataFrame([{"data": "2025-01-01", "valor": 50.0}]),
+            coluna_data="data",
+            coluna_valor="valor",
+        ).set_index("porte")
+
+        self.assertEqual(resultado.loc["NAO_IDENTIFICADO", "quantidade_contratos"], 1)
+        self.assertEqual(resultado.loc["NAO_IDENTIFICADO", "percentual_valor"], 1.0)
+        self.assertEqual(resultado.loc["ME", "quantidade_contratos"], 0)
+
+    def test_retorna_schema_estavel_quando_base_vazia(self) -> None:
+        resultado = kpis.calcular_participacao_por_porte_por_mes(
+            pd.DataFrame(),
+            coluna_data="data",
+            coluna_valor="valor",
+        )
+
+        self.assertEqual(
+            list(resultado.columns),
+            [
+                "ano_mes",
+                "porte",
+                "total_contratos",
+                "quantidade_contratos",
+                "total_compras",
+                "valor_porte",
+                "percentual_contratos",
+                "percentual_valor",
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
