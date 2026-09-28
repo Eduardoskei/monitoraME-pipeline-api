@@ -390,3 +390,35 @@ def consultar_kpi_tce_me_por_mes(
         "kpi": "participacao_me_por_mes",
         "dados": dataframe_para_registros(resultado, limite=limite),
     }
+
+
+def consultar_kpi_tce_portes_por_mes(
+    data_inicial: str,
+    data_final: str,
+    *,
+    codigo_municipio: str = CODIGO_MUNICIPIO_TCE_PADRAO,
+    throttle_fornecedores: float = 0.3,
+    limite: int | None = 100,
+) -> dict[str, Any]:
+    base, metadados = montar_base_tce_contratos(
+        data_inicial,
+        data_final,
+        codigo_municipio=codigo_municipio,
+        enriquecer_fornecedores=True,
+        throttle_fornecedores=throttle_fornecedores,
+    )
+    resultado = kpis.calcular_participacao_por_porte_por_mes(
+        base,
+        coluna_data="data_contrato",
+        coluna_valor="valor_total_contrato",
+    )
+    return {
+        **metadados,
+        "limite_resposta": limite,
+        "totais": {
+            "contratos": int(len(base)),
+            "registros_kpi": int(len(resultado)),
+        },
+        "kpi": "participacao_por_porte_por_mes",
+        "dados": dataframe_para_registros(resultado, limite=limite),
+    }

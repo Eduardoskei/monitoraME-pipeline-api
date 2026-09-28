@@ -190,6 +190,43 @@ def tce_kpi_me_por_mes(
     except Exception as error:
         raise _erro_pipeline(error) from error
 
+@router.get(
+    "/tce/kpis/portes-por-mes",
+    summary="Calcula participação por porte empresarial por mês",
+    description=(
+        "Calcula quantidade, valor e percentual mensal de "
+        "MEI, ME, EPP, demais e fornecedores não identificados."
+    ),
+    response_description=(
+        "Série mensal por porte, totais e metadados do TCE-CE."
+    ),
+)
+def tce_kpi_portes_por_mes(
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
+    codigo_municipio: Annotated[
+        str,
+        Query(description="Código do município no TCE-CE."),
+    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
+    limite: Annotated[
+        int | None,
+        Query(
+            description="Limite de registros retornados.",
+            ge=1,
+            le=1000,
+        ),
+    ] = 100,
+) -> dict[str, object]:
+    try:
+        _validar_periodo_api(data_inicial, data_final)
+        return analisys.consultar_kpi_tce_portes_por_mes(
+            data_inicial=data_inicial,
+            data_final=data_final,
+            codigo_municipio=codigo_municipio,
+            limite=limite,
+        )
+    except Exception as error:
+        raise _erro_pipeline(error) from error
 
 @router.get(
     "/tce/analitico/indicadores",
