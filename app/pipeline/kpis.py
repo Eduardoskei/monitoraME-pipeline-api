@@ -231,7 +231,7 @@ def calcular_participacao_me_por_mes(
 
 PARTICIPACAO_PORTE_RULE = (
     "ME exclui MEI; optante_mei=true tem precedencia sobre o porte cadastral. "
-    "Cada rate = valor do porte / valor total; MPE = MEI + ME + EPP. "
+    "Cada rate = valor do porte / valor total; MPE = ME + EPP; MEI separado. "
     "OTHER e UNKNOWN integram o denominador. Total zero ou valor ausente "
     "gera taxas null. Valores em BRL sao arredondados por registro para centavos."
 )
@@ -245,7 +245,7 @@ def calcular_participacao_por_porte(
     coluna_porte: str = "fornecedor_porte_padronizado",
     coluna_mei: str = "fornecedor_optante_mei",
 ) -> pd.DataFrame:
-    """Calcula MEI, ME, EPP e sua uniao MPE; entrada monetaria em BRL.
+    """Calcula MEI, ME, EPP e MPE (ME + EPP); entrada monetaria em BRL.
 
     Classificacoes ausentes nao sao inferidas de flags de elegibilidade.
     Uma quantia ausente torna o total e as taxas do grupo indisponiveis.
@@ -284,7 +284,7 @@ def calcular_participacao_por_porte(
         for categoria in ("MEI", "ME", "EPP"):
             valores = grupo.loc[grupo["_porte"].eq(categoria), "_cents"]
             registro[categoria.lower() + "_cents"] = None if valores.isna().any() else sum(valores)
-        partes = [registro[c + "_cents"] for c in ("mei", "me", "epp")]
+        partes = [registro[c + "_cents"] for c in ("me", "epp")]
         registro["mpe_cents"] = None if None in partes else sum(partes)
         for categoria in ("mei", "me", "epp", "mpe"):
             registro[categoria + "_rate"] = registro[categoria + "_cents"] / total if total else None

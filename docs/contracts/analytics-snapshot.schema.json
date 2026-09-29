@@ -1,0 +1,350 @@
+{
+  "$defs": {
+    "Commitment": {
+      "additionalProperties": false,
+      "properties": {
+        "municipality_ibge_code": {
+          "pattern": "^[0-9]{7}$",
+          "title": "Municipality Ibge Code",
+          "type": "string"
+        },
+        "uf": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Uf",
+          "type": "string"
+        },
+        "tce_municipality_code": {
+          "minLength": 1,
+          "title": "Tce Municipality Code",
+          "type": "string"
+        },
+        "budget_year": {
+          "maximum": 9999,
+          "minimum": 1900,
+          "title": "Budget Year",
+          "type": "integer"
+        },
+        "agency_code": {
+          "minLength": 1,
+          "title": "Agency Code",
+          "type": "string"
+        },
+        "budget_unit_code": {
+          "minLength": 1,
+          "title": "Budget Unit Code",
+          "type": "string"
+        },
+        "issue_date": {
+          "format": "date",
+          "title": "Issue Date",
+          "type": "string"
+        },
+        "commitment_number": {
+          "minLength": 1,
+          "title": "Commitment Number",
+          "type": "string"
+        },
+        "supplier_cnpj": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{14}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supplier Cnpj"
+        },
+        "company_size": {
+          "enum": [
+            "ME",
+            "EPP",
+            "MEI",
+            "OTHER",
+            "UNKNOWN"
+          ],
+          "title": "Company Size",
+          "type": "string"
+        },
+        "is_mei": {
+          "default": false,
+          "title": "Is Mei",
+          "type": "boolean"
+        },
+        "historical_size_classification": {
+          "title": "Historical Size Classification",
+          "type": "boolean"
+        },
+        "supplier_municipality_ibge_code": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{7}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supplier Municipality Ibge Code"
+        },
+        "supplier_uf": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supplier Uf"
+        },
+        "expense_element_code": {
+          "pattern": "^[0-9]{6}$",
+          "title": "Expense Element Code",
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "municipality_ibge_code",
+        "uf",
+        "tce_municipality_code",
+        "budget_year",
+        "agency_code",
+        "budget_unit_code",
+        "issue_date",
+        "commitment_number",
+        "company_size",
+        "historical_size_classification",
+        "expense_element_code",
+        "events"
+      ],
+      "title": "Commitment",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "ORIGINAL",
+            "REINFORCEMENT",
+            "CANCELLATION"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "event_date": {
+          "format": "date",
+          "title": "Event Date",
+          "type": "string"
+        },
+        "amount_cents": {
+          "minimum": 0,
+          "title": "Amount Cents",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "kind",
+        "event_date",
+        "amount_cents"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "MonthCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "municipality_ibge_code": {
+          "pattern": "^[0-9]{7}$",
+          "title": "Municipality Ibge Code",
+          "type": "string"
+        },
+        "uf": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Uf",
+          "type": "string"
+        },
+        "month": {
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+          "title": "Month",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL",
+            "NO_DATA",
+            "STALE"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "municipality_ibge_code",
+        "uf",
+        "month",
+        "status"
+      ],
+      "title": "MonthCoverage",
+      "type": "object"
+    },
+    "Municipality": {
+      "additionalProperties": false,
+      "properties": {
+        "ibge_code": {
+          "pattern": "^[0-9]{7}$",
+          "title": "Ibge Code",
+          "type": "string"
+        },
+        "tce_municipality_code": {
+          "minLength": 1,
+          "title": "Tce Municipality Code",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "uf": {
+          "pattern": "^[A-Z]{2}$",
+          "title": "Uf",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "required": [
+        "ibge_code",
+        "tce_municipality_code",
+        "name",
+        "uf"
+      ],
+      "title": "Municipality",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.9.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_dictionary_version": {
+      "minLength": 1,
+      "title": "Event Dictionary Version",
+      "type": "string"
+    },
+    "data_as_of": {
+      "format": "date",
+      "title": "Data As Of",
+      "type": "string"
+    },
+    "last_successful_load_at": {
+      "format": "date-time",
+      "title": "Last Successful Load At",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    },
+    "is_stale": {
+      "default": false,
+      "title": "Is Stale",
+      "type": "boolean"
+    },
+    "stale_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stale Reason"
+    },
+    "municipalities": {
+      "items": {
+        "$ref": "#/$defs/Municipality"
+      },
+      "title": "Municipalities",
+      "type": "array"
+    },
+    "expense_elements": {
+      "minProperties": 1,
+      "patternProperties": {
+        "^[0-9]{6}$": {
+          "type": "string"
+        }
+      },
+      "title": "Expense Elements",
+      "type": "object"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/MonthCoverage"
+      },
+      "title": "Coverage",
+      "type": "array"
+    },
+    "commitments": {
+      "items": {
+        "$ref": "#/$defs/Commitment"
+      },
+      "title": "Commitments",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_dictionary_version",
+    "data_as_of",
+    "last_successful_load_at",
+    "sources",
+    "municipalities",
+    "expense_elements",
+    "coverage",
+    "commitments"
+  ],
+  "title": "Snapshot",
+  "type": "object"
+}

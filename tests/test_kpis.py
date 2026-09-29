@@ -240,9 +240,9 @@ class ParticipacaoPorPorteTest(unittest.TestCase):
                                   ["ME", "ME", "EPP", "OTHER"], [True, False, None, False])
         linha = resultado.iloc[0]
         self.assertEqual(linha["total_cents"], 100000000)
-        for porte, esperado in [("mei", .10), ("me", .20), ("epp", .15), ("mpe", .45)]:
+        for porte, esperado in [("mei", .10), ("me", .20), ("epp", .15), ("mpe", .35)]:
             self.assertAlmostEqual(linha[porte + "_rate"], esperado)
-        self.assertEqual(linha["mpe_cents"], sum(linha[p + "_cents"] for p in ("mei", "me", "epp")))
+        self.assertEqual(linha["mpe_cents"], sum(linha[p + "_cents"] for p in ("me", "epp")))
 
     def test_zero_ausentes_e_desconhecidos(self):
         for valores in ([0, 0], [None, 10]):

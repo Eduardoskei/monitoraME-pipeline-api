@@ -145,28 +145,13 @@ def tce_contratos(
 
 @router.get(
     "/tce/kpis/me-por-mes",
-    summary="Calcula participacao de ME por mes",
-    description="Calcula MEI, ME isolada, EPP e MPE por mes nos contratos do TCE-CE. ME exclui MEI; MPE = MEI + ME + EPP. Valores em centavos e taxas decimais de 0 a 1; regra em meta.calculation_rule.",
-    response_description="Serie mensal do KPI, totais e metadados da consulta TCE-CE.",
+    deprecated=True,
+    summary="Indicador por contratos descontinuado",
+    description="Use /api/v1/analysis/public/overview, baseado em empenhado liquido.",
+    responses={410: {"description": "Indicador por contratos substituido pelo contrato publico 0.9.1."}},
 )
-def tce_kpi_me_por_mes(
-    data_inicial: Annotated[str, Query(description="Data inicial em YYYY-MM-DD ou YYYYMMDD.")],
-    data_final: Annotated[str, Query(description="Data final em YYYY-MM-DD ou YYYYMMDD.")],
-    codigo_municipio: Annotated[
-        str,
-        Query(description="Codigo do municipio no TCE-CE."),
-    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
-    limite: Annotated[
-        int | None,
-        Query(description="Limite de periodos retornados.", ge=1, le=1000),
-    ] = 100,
-) -> dict[str, object]:
-    try:
-        return analisys.consultar_kpi_tce_me_por_mes(
-            data_inicial=data_inicial,
-            data_final=data_final,
-            codigo_municipio=codigo_municipio,
-            limite=limite,
-        )
-    except Exception as error:
-        raise _erro_pipeline(error) from error
+def tce_kpi_me_por_mes() -> dict[str, object]:
+    raise HTTPException(
+        status_code=410,
+        detail="Indicador por contratos descontinuado. Use /api/v1/analysis/public/overview com start_date e end_date.",
+    )

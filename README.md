@@ -307,24 +307,28 @@ Falhas persistentes interrompem a rodada, cancelam consultas pendentes e geram r
 A normalizacao do pipeline (`app/pipeline/cleaners/pncp.py`) e o spike reconhecem os seis codigos do catalogo, incluindo `6 = MEI`. O spike mede o campo original `porteFornecedorId`: valores ausentes ou invalidos contam como Nao informado, com o motivo separado. A normalizacao do pipeline mantem sua regra de priorizar a descricao e preservar valores desconhecidos como nulos. Essa distincao evita mascarar lacunas do campo original na analise de cobertura.
 
 
-## Participacao mensal por porte
+## Indicador publico de ME (contrato 0.9.1)
 
-`GET /pipeline/tce/kpis/me-por-mes` retorna `mei_rate`, `me_rate`,
-`epp_rate` e `mpe_rate` como razoes de 0 a 1. ME e exclusiva: porte MEI
-ou opcao MEI verdadeira tem precedencia sobre porte ME cadastral.
-MPE = MEI + ME + EPP, sem dupla contagem. Outros portes e desconhecidos
-participam do total, mas nao dos numeradores.
+`GET /api/v1/analysis/public/overview?start_date=2025-01-01&end_date=2025-12-31`
+retorna o contrato da Visao Geral. O escopo publico e exclusivamente ME;
+`company_size` e `company_sizes`, mesmo vazios, retornam 422.
 
-Os campos monetarios da serie sao `total_cents`, `mei_cents`, `me_cents`,
-`epp_cents` e `mpe_cents`, inteiros em centavos de BRL. Substituem
-`total_compras` e `valor_me`; `me_rate` substitui `percentual_me`.
-Os valores da fonte em reais sao convertidos por registro com arredondamento
-half-up para centavos antes da soma. Total zero ou quantia ausente no grupo
-produz taxas `null`. Sem registros, `dados` e `[]` e
-`pagination.total_items` e zero. O mes continua em `ano_mes` (`YYYY-MM`).
+O valor-base e empenhado liquido: original + reforcos - anulacoes validas,
+em centavos inteiros, com deduplicacao por chave composta. MEI nao entra em ME.
+No calculo por porte, **MPE = ME + EPP**, com MEI separado.
 
-A regra acompanha a resposta em `meta.calculation_rule`, com
-`meta.source_timezone = America/Fortaleza`. Exemplo: MEI R$ 100.000,
-ME R$ 200.000, EPP R$ 150.000 e total R$ 1.000.000 produzem taxas
-0.10, 0.20, 0.15 e 0.45, respectivamente. A rota nao expoe filtros
-`company_sizes`, `supplier_origins` ou `expense_element_codes`.
+`kpis.me_share_of_all_purchases_rate` e `kpis.me_share_change_pp` permanecem
+`null`; `kpis.me_share_of_all_purchases_status` e
+`PENDING_PRODUCT_LEGAL_APPROVAL`. O total de todos os portes nao e exposto.
+A antiga rota `/pipeline/tce/kpis/me-por-mes`, baseada em contratos, retorna
+410 com orientacao de migracao. O frontend deve consumir os campos de `kpis`
+e posicionar o indicador separadamente do indicador de capa.
+
+A rota exige uma carga canonica de empenhos em `ANALYTICS_SNAPSHOT_PATH`.
+Nao existe adaptacao automatica de contratos para empenhos. Sem carga valida,
+retorna 503; uma carga anterior configurada permite resposta com `is_stale=true`.
+O mapeamento dos eventos TCE ainda depende da confirmacao indicada no contrato.
+
+Veja [integracao e limites](docs/contracts/analysis-integration.md),
+[schema publico](docs/contracts/public-overview.schema.json) e
+[schema de entrada](docs/contracts/analytics-snapshot.schema.json).

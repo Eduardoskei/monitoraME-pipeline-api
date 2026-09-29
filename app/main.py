@@ -1,6 +1,8 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core import database, log_database
 from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
@@ -43,3 +45,12 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+# Empty allowlist intentionally enables no cross-origin browser clients.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv("ANALYTICS_CORS_ORIGINS", "").split(",") if origin.strip() and origin.strip() != "*"],
+    allow_methods=["GET"],
+    allow_headers=["Accept", "Content-Type"],
+    allow_credentials=False,
+)
