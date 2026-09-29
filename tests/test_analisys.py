@@ -208,8 +208,8 @@ class ConsultarKpiTceMePorMesTest(unittest.TestCase):
         self.assertEqual(resposta["kpi"], "participacao_me_por_mes")
         self.assertEqual(resposta["totais"], {"contratos": 2, "periodos": 1})
         self.assertEqual(resposta["dados"][0]["ano_mes"], "2025-01")
-        self.assertEqual(resposta["dados"][0]["total_compras"], 15000.0)
-        self.assertEqual(resposta["dados"][0]["valor_me"], 10000.0)
+        self.assertEqual(resposta["dados"][0]["total_cents"], 1500000)
+        self.assertEqual(resposta["dados"][0]["me_cents"], 1000000)
 
 
 if __name__ == "__main__":

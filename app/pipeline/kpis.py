@@ -16,7 +16,11 @@ Uso tipico:
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
 import pandas as pd
+
+from app.pipeline.cleaners.opencnpj import normalizar_booleano
 
 from app.utils import normalizar_chave_entidade, normalizar_cnpj
 
@@ -223,3 +227,66 @@ def calcular_participacao_me_por_mes(
         coluna_valor=coluna_valor,
         coluna_elegivel_me=coluna_elegivel_me,
     )
+
+
+PARTICIPACAO_PORTE_RULE = (
+    "ME exclui MEI; optante_mei=true tem precedencia sobre o porte cadastral. "
+    "Cada rate = valor do porte / valor total; MPE = MEI + ME + EPP. "
+    "OTHER e UNKNOWN integram o denominador. Total zero ou valor ausente "
+    "gera taxas null. Valores em BRL sao arredondados por registro para centavos."
+)
+
+
+def calcular_participacao_por_porte(
+    df: pd.DataFrame,
+    *,
+    colunas_agrupamento: list[str],
+    coluna_valor: str,
+    coluna_porte: str = "fornecedor_porte_padronizado",
+    coluna_mei: str = "fornecedor_optante_mei",
+) -> pd.DataFrame:
+    """Calcula MEI, ME, EPP e sua uniao MPE; entrada monetaria em BRL.
+
+    Classificacoes ausentes nao sao inferidas de flags de elegibilidade.
+    Uma quantia ausente torna o total e as taxas do grupo indisponiveis.
+    """
+    campos = ["total_cents", "mei_cents", "me_cents", "epp_cents", "mpe_cents",
+              "mei_rate", "me_rate", "epp_rate", "mpe_rate"]
+    if df.empty:
+        return pd.DataFrame(columns=[*colunas_agrupamento, *campos])
+    _validar_colunas(df, [*colunas_agrupamento, coluna_valor], "participacao por porte")
+    base = df.copy()
+
+    def centavos(valor: object) -> int | None:
+        if pd.isna(valor):
+            return None
+        try:
+            numero = Decimal(str(valor))
+            if not numero.is_finite() or numero < 0:
+                raise ValueError
+            return int((numero * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        except (InvalidOperation, ValueError):
+            raise DadosInsuficientesKPI("Valor monetario invalido para participacao por porte.")
+
+    base["_cents"] = pd.Series([centavos(v) for v in base[coluna_valor]], index=base.index, dtype=object)
+    porte = base.get(coluna_porte, pd.Series("UNKNOWN", index=base.index)).astype("string")
+    porte = porte.where(porte.isin(["MEI", "ME", "EPP", "OTHER"]), "UNKNOWN")
+    if coluna_mei in base:
+        mei = base[coluna_mei].map(normalizar_booleano).astype("boolean").fillna(False)
+        porte = porte.mask(mei, "MEI")
+    base["_porte"] = porte
+    registros = []
+    for chave, grupo in base.groupby(colunas_agrupamento, dropna=False, observed=True):
+        chave = chave if isinstance(chave, tuple) else (chave,)
+        registro = dict(zip(colunas_agrupamento, chave))
+        total = None if grupo["_cents"].isna().any() else sum(grupo["_cents"])
+        registro["total_cents"] = total
+        for categoria in ("MEI", "ME", "EPP"):
+            valores = grupo.loc[grupo["_porte"].eq(categoria), "_cents"]
+            registro[categoria.lower() + "_cents"] = None if valores.isna().any() else sum(valores)
+        partes = [registro[c + "_cents"] for c in ("mei", "me", "epp")]
+        registro["mpe_cents"] = None if None in partes else sum(partes)
+        for categoria in ("mei", "me", "epp", "mpe"):
+            registro[categoria + "_rate"] = registro[categoria + "_cents"] / total if total else None
+        registros.append(registro)
+    return pd.DataFrame(registros, columns=[*colunas_agrupamento, *campos], dtype=object)

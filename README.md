@@ -305,3 +305,26 @@ python -m scripts.spike_pncp_representatividade --output docs/spikes/pncp-ce-202
 Falhas persistentes interrompem a rodada, cancelam consultas pendentes e geram relatório de coleta incompleta. O resultado de 7,07% do piloto não é uma estimativa estadual.
 
 A normalizacao do pipeline (`app/pipeline/cleaners/pncp.py`) e o spike reconhecem os seis codigos do catalogo, incluindo `6 = MEI`. O spike mede o campo original `porteFornecedorId`: valores ausentes ou invalidos contam como Nao informado, com o motivo separado. A normalizacao do pipeline mantem sua regra de priorizar a descricao e preservar valores desconhecidos como nulos. Essa distincao evita mascarar lacunas do campo original na analise de cobertura.
+
+
+## Participacao mensal por porte
+
+`GET /pipeline/tce/kpis/me-por-mes` retorna `mei_rate`, `me_rate`,
+`epp_rate` e `mpe_rate` como razoes de 0 a 1. ME e exclusiva: porte MEI
+ou opcao MEI verdadeira tem precedencia sobre porte ME cadastral.
+MPE = MEI + ME + EPP, sem dupla contagem. Outros portes e desconhecidos
+participam do total, mas nao dos numeradores.
+
+Os campos monetarios da serie sao `total_cents`, `mei_cents`, `me_cents`,
+`epp_cents` e `mpe_cents`, inteiros em centavos de BRL. Substituem
+`total_compras` e `valor_me`; `me_rate` substitui `percentual_me`.
+Os valores da fonte em reais sao convertidos por registro com arredondamento
+half-up para centavos antes da soma. Total zero ou quantia ausente no grupo
+produz taxas `null`. Sem registros, `dados` e `[]` e
+`pagination.total_items` e zero. O mes continua em `ano_mes` (`YYYY-MM`).
+
+A regra acompanha a resposta em `meta.calculation_rule`, com
+`meta.source_timezone = America/Fortaleza`. Exemplo: MEI R$ 100.000,
+ME R$ 200.000, EPP R$ 150.000 e total R$ 1.000.000 produzem taxas
+0.10, 0.20, 0.15 e 0.45, respectivamente. A rota nao expoe filtros
+`company_sizes`, `supplier_origins` ou `expense_element_codes`.

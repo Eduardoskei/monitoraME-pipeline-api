@@ -268,6 +268,11 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     if coluna_mei:
         df["optante_mei"] = df[coluna_mei].map(normalizar_booleano).astype("boolean")
 
+    if "optante_mei" in df:
+        eh_mei = df["optante_mei"].fillna(False)
+        df.loc[eh_mei, "porte_padronizado"] = "MEI"
+        df.loc[eh_mei, "elegivel_me"] = False
+
     df["municipio_sede"] = _campo_canonico(df, _COLUNAS_MUNICIPIO_SEDE)
     df["uf_sede"] = _campo_canonico(df, _COLUNAS_UF_SEDE).map(normalizar_uf)
     df["cnae_principal_codigo"] = _campo_canonico(df, _COLUNAS_CNAE_PRINCIPAL_CODIGO).map(normalizar_codigo_cnae)

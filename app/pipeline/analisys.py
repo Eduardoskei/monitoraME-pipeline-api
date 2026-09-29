@@ -243,9 +243,12 @@ def consultar_kpi_tce_me_por_mes(
         enriquecer_fornecedores=True,
         throttle_fornecedores=throttle_fornecedores,
     )
-    resultado = kpis.calcular_participacao_me_por_mes(
+    base = base.copy()
+    if not base.empty:
+        base["ano_mes"] = kpis.extrair_ano_mes(base["data_contrato"])
+    resultado = kpis.calcular_participacao_por_porte(
         base,
-        coluna_data="data_contrato",
+        colunas_agrupamento=["ano_mes"],
         coluna_valor="valor_total_contrato",
     )
     return {
@@ -253,5 +256,10 @@ def consultar_kpi_tce_me_por_mes(
         "limite_resposta": limite,
         "totais": {"contratos": int(len(base)), "periodos": int(len(resultado))},
         "kpi": "participacao_me_por_mes",
+        "meta": {
+            "source_timezone": "America/Fortaleza",
+            "calculation_rule": kpis.PARTICIPACAO_PORTE_RULE,
+        },
+        "pagination": {"total_items": int(len(resultado))},
         "dados": dataframe_para_registros(resultado, limite=limite),
     }

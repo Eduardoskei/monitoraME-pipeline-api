@@ -225,5 +225,65 @@ class ParticipacaoMePorMesEndToEndTest(unittest.TestCase):
         self.assertEqual(por_mes.loc["2025-02", "percentual_me"], 0.0)
 
 
+
+class ParticipacaoPorPorteTest(unittest.TestCase):
+    def calcular(self, valores, portes, flags=None):
+        df = pd.DataFrame({"mes": ["2025-01"] * len(valores), "valor": valores,
+                           "fornecedor_porte_padronizado": portes})
+        if flags is not None:
+            df["fornecedor_optante_mei"] = flags
+        return kpis.calcular_participacao_por_porte(
+            df, colunas_agrupamento=["mes"], coluna_valor="valor")
+
+    def test_exemplo_e_precedencia_mei(self):
+        resultado = self.calcular([100000, 200000, 150000, 550000],
+                                  ["ME", "ME", "EPP", "OTHER"], [True, False, None, False])
+        linha = resultado.iloc[0]
+        self.assertEqual(linha["total_cents"], 100000000)
+        for porte, esperado in [("mei", .10), ("me", .20), ("epp", .15), ("mpe", .45)]:
+            self.assertAlmostEqual(linha[porte + "_rate"], esperado)
+        self.assertEqual(linha["mpe_cents"], sum(linha[p + "_cents"] for p in ("mei", "me", "epp")))
+
+    def test_zero_ausentes_e_desconhecidos(self):
+        for valores in ([0, 0], [None, 10]):
+            linha = self.calcular(valores, ["ME", "MEI"]).iloc[0]
+            self.assertIsNone(linha["me_rate"])
+            self.assertIsNone(linha["mpe_rate"])
+        linha = self.calcular([10, 30], ["ME", None]).iloc[0]
+        self.assertEqual(linha["me_rate"], .25)
+        self.assertEqual(linha["mei_rate"], 0)
+
+    def test_centavos_e_json_sem_nan(self):
+        from app.pipeline.analisys import dataframe_para_registros
+        import json
+        resultado = self.calcular(["1.005", None], ["ME", "UNKNOWN"])
+        registro = dataframe_para_registros(resultado)[0]
+        self.assertEqual(registro["me_cents"], 101)
+        self.assertIsInstance(registro["me_cents"], int)
+        self.assertIsNone(registro["total_cents"])
+        json.dumps(registro, allow_nan=False)
+
+    def test_vazio_e_valores_invalidos(self):
+        self.assertTrue(self.calcular([], []).empty)
+        for valor in (-1, float("inf"), "invalido"):
+            with self.assertRaises(kpis.DadosInsuficientesKPI):
+                self.calcular([valor], ["ME"])
+
+    def test_limpeza_exclui_optante_mei_da_me(self):
+        df = opencnpj_cleaning.limpar_fornecedores([
+            {"cnpj": "11444777000161", "porte": "ME", "opencnpj_opcao_pelo_mei": "SIM"}
+        ])
+        self.assertEqual(df.iloc[0]["porte_padronizado"], "MEI")
+        self.assertFalse(df.iloc[0]["elegivel_me"])
+
+    def test_rota_sem_dados(self):
+        from app.pipeline import analisys
+        with patch.object(analisys, "montar_base_tce_contratos", return_value=(pd.DataFrame(), {})):
+            resposta = analisys.consultar_kpi_tce_me_por_mes("2025-01-01", "2025-01-31")
+        self.assertEqual(resposta["dados"], [])
+        self.assertEqual(resposta["pagination"]["total_items"], 0)
+        self.assertEqual(resposta["meta"]["source_timezone"], "America/Fortaleza")
+        self.assertIn("ME exclui MEI", resposta["meta"]["calculation_rule"])
+
 if __name__ == "__main__":
     unittest.main()

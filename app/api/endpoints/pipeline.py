@@ -146,7 +146,7 @@ def tce_contratos(
 @router.get(
     "/tce/kpis/me-por-mes",
     summary="Calcula participacao de ME por mes",
-    description="Calcula a participacao mensal de microempresas nos contratos do TCE-CE.",
+    description="Calcula MEI, ME isolada, EPP e MPE por mes nos contratos do TCE-CE. ME exclui MEI; MPE = MEI + ME + EPP. Valores em centavos e taxas decimais de 0 a 1; regra em meta.calculation_rule.",
     response_description="Serie mensal do KPI, totais e metadados da consulta TCE-CE.",
 )
 def tce_kpi_me_por_mes(
