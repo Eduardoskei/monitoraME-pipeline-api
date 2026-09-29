@@ -43,6 +43,7 @@ def _fornecedores_df_valido() -> pd.DataFrame:
             "uf": "CE",
             "cnae_principal": "6201501",
             "cnaes_secundarios": ["4751201", "9511800"],
+            "simples_mei": {"opcao_mei": "N"},
         }
         fornecedor = fornecedores.coletar_fornecedor("11.444.777/0001-61")
 
@@ -85,6 +86,11 @@ class EnriquecerComFornecedorTest(unittest.TestCase):
         encontrado = resultado[resultado["contrato_id"] == 1].iloc[0]
         self.assertEqual(encontrado["fornecedor_porte_padronizado"], "ME")
         self.assertTrue(encontrado["fornecedor_elegivel_me"])
+        self.assertFalse(encontrado["fornecedor_optante_mei"])
+        self.assertTrue(encontrado["fornecedor_mei_discriminado"])
+        self.assertEqual(encontrado["fornecedor_fonte_porte"], "RECEITA_FEDERAL_VIA_OPENCNPJ")
+        self.assertEqual(encontrado["fornecedor_procedencia_porte"], "RETRATO_ATUAL")
+        self.assertIsNotNone(encontrado["fornecedor_observado_em"])
 
         nao_encontrado = resultado[resultado["contrato_id"] == 2].iloc[0]
         self.assertTrue(pd.isna(nao_encontrado["fornecedor_porte_padronizado"]))

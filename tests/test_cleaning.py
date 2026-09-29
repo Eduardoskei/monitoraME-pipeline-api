@@ -228,6 +228,10 @@ class LimparIbgeMunicipiosTest(unittest.TestCase):
 class LimparFornecedoresTest(unittest.TestCase):
     """Usa app.pipeline.ingestion.fornecedores de verdade (só OpenCNPJ é mockada)."""
 
+    def test_porte_numerico_um_e_me_e_nao_informado_permanece_sem_classificacao(self) -> None:
+        self.assertEqual(opencnpj_cleaning.normalizar_porte_empresarial("1"), "ME")
+        self.assertIsNone(opencnpj_cleaning.normalizar_porte_empresarial("NAO INFORMADO"))
+
     @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
     def test_pipeline_completo_a_partir_da_ingestao_real(self, mock_opencnpj) -> None:
         mock_opencnpj.return_value = {
@@ -279,6 +283,11 @@ class LimparFornecedoresTest(unittest.TestCase):
         # porte padronizado para o vocabulario fixo usado na analise de compras ME
         self.assertEqual(df.iloc[0]["porte_padronizado"], "ME")
         self.assertTrue(df.iloc[0]["elegivel_me"])
+        self.assertTrue(df.iloc[0]["mei_discriminado"])
+        self.assertEqual(df.iloc[0]["fonte_porte"], "RECEITA_FEDERAL_VIA_OPENCNPJ")
+        self.assertEqual(df.iloc[0]["procedencia_porte"], "RETRATO_ATUAL")
+        observado_em = pd.Timestamp(df.iloc[0]["observado_em"])
+        self.assertIsNotNone(observado_em.tzinfo)
         # optante pelo Simples Nacional (regime tributario) — criterio distinto do porte
         self.assertTrue(df.iloc[0]["optante_simples_nacional"])
         self.assertEqual(df.iloc[0]["data_opcao_simples_nacional"], "2018-01-01")
@@ -299,6 +308,7 @@ class LimparFornecedoresTest(unittest.TestCase):
 
         self.assertEqual(df.iloc[0]["porte_padronizado"], "ME")
         self.assertTrue(df.iloc[0]["elegivel_me"])
+        self.assertFalse(df.iloc[0]["mei_discriminado"])
 
     @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
     def test_pipeline_com_schema_receita_do_opencnpj_org(self, mock_opencnpj) -> None:
@@ -397,6 +407,7 @@ class LimparFornecedoresTest(unittest.TestCase):
 
         self.assertEqual(df.iloc[0]["porte_padronizado"], "MEI")
         self.assertFalse(df.iloc[0]["elegivel_me"])
+        self.assertTrue(df.iloc[0]["mei_discriminado"])
 
     def test_sem_porte_mantem_elegibilidade_nula_para_kpi(self) -> None:
         df = opencnpj_cleaning.limpar_fornecedores(

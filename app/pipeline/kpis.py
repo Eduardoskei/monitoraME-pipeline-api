@@ -21,6 +21,9 @@ class DadosInsuficientesKPI(ValueError):
 
 
 ORIGEM_FORNECEDOR_LOCAL = "Sediado no município comprador"
+ESTADO_MPE_DISPONIVEL = "DISPONIVEL"
+ESTADO_MPE_INDISPONIVEL = "INDISPONIVEL"
+MOTIVO_MPE_NAO_DISCRIMINADO = "MEI_NAO_DISCRIMINADO"
 
 PORTES_EMPRESARIAIS = (
     "MEI",
@@ -65,6 +68,22 @@ def _booleano_estrito(serie: pd.Series) -> pd.Series:
     return serie.map(lambda valor: bool(valor) if pd.notna(valor) else False)
 
 
+def _booleano_nullable(serie: pd.Series) -> pd.Series:
+    return serie.map(lambda valor: bool(valor) if pd.notna(valor) else pd.NA).astype("boolean")
+
+
+def _mpe_disponivel(marcadores: pd.Series) -> bool:
+    return not bool(marcadores.isna().any())
+
+
+def _estado_mpe(disponivel: bool) -> str:
+    return ESTADO_MPE_DISPONIVEL if disponivel else ESTADO_MPE_INDISPONIVEL
+
+
+def _motivo_mpe(disponivel: bool) -> str | None:
+    return None if disponivel else MOTIVO_MPE_NAO_DISCRIMINADO
+
+
 def _preparar_base_analitica(df: pd.DataFrame) -> pd.DataFrame:
     colunas_obrigatorias = [
         "ano_mes",
@@ -88,7 +107,7 @@ def _preparar_base_analitica(df: pd.DataFrame) -> pd.DataFrame:
     base = df.copy()
     base["_valor_indicador"] = pd.to_numeric(base["valor"], errors="coerce")
     base["_fornecedor_e_me"] = _booleano_estrito(base["fornecedor_e_me"])
-    base["_fornecedor_e_mpe"] = _booleano_estrito(base["fornecedor_e_mpe"])
+    base["_fornecedor_e_mpe"] = _booleano_nullable(base["fornecedor_e_mpe"])
     base["_fornecedor_local"] = base["origem_geografica"].eq(ORIGEM_FORNECEDOR_LOCAL)
     return base
 
@@ -129,6 +148,13 @@ def _soma_valor_marcado(base: pd.DataFrame, valores: pd.Series, coluna_marcador:
     return _soma_valor(valores[marcador])
 
 
+def _soma_valor_mpe(base: pd.DataFrame, valores: pd.Series) -> object:
+    marcador = base.loc[valores.index, "_fornecedor_e_mpe"]
+    if not _mpe_disponivel(marcador):
+        return pd.NA
+    return _soma_valor(valores[marcador.fillna(False)])
+
+
 def _serie_mensal(base: pd.DataFrame) -> pd.DataFrame:
     serie = (
         base.groupby("ano_mes", dropna=False)
@@ -141,7 +167,7 @@ def _serie_mensal(base: pd.DataFrame) -> pd.DataFrame:
             ),
             valor_mpe=(
                 "_valor_indicador",
-                lambda valores: _soma_valor_marcado(base, valores, "_fornecedor_e_mpe"),
+                lambda valores: _soma_valor_mpe(base, valores),
             ),
             valor_fornecedor_local=(
                 "_valor_indicador",
@@ -160,6 +186,15 @@ def _serie_mensal(base: pd.DataFrame) -> pd.DataFrame:
         lambda linha: _percentual_valor(linha["valor_mpe"], linha["valor_total"]),
         axis=1,
     )
+    qualidade_mpe = (
+        base.groupby("ano_mes", dropna=False)["_fornecedor_e_mpe"]
+        .apply(_mpe_disponivel)
+        .rename("mei_discriminado")
+        .reset_index()
+    )
+    serie = serie.merge(qualidade_mpe, on="ano_mes", how="left")
+    serie["estado_mpe"] = serie["mei_discriminado"].map(_estado_mpe)
+    serie["motivo_mpe"] = serie["mei_discriminado"].map(_motivo_mpe)
     serie["percentual_fornecedor_local"] = serie.apply(
         lambda linha: _percentual_valor(linha["valor_fornecedor_local"], linha["valor_total"]),
         axis=1,
@@ -184,7 +219,12 @@ def calcular_indicadores_analiticos_principais(
     base = _preparar_base_analitica(base_analitica)
     valor_total = _soma_valor(base["_valor_indicador"])
     valor_me = _soma_valor(base.loc[base["_fornecedor_e_me"], "_valor_indicador"])
-    valor_mpe = _soma_valor(base.loc[base["_fornecedor_e_mpe"], "_valor_indicador"])
+    mpe_disponivel = _mpe_disponivel(base["_fornecedor_e_mpe"])
+    valor_mpe = (
+        _soma_valor(base.loc[base["_fornecedor_e_mpe"].fillna(False), "_valor_indicador"])
+        if mpe_disponivel
+        else pd.NA
+    )
     valor_local = _soma_valor(base.loc[base["_fornecedor_local"], "_valor_indicador"])
 
     resumo_geral = pd.DataFrame(
@@ -198,6 +238,9 @@ def calcular_indicadores_analiticos_principais(
                 "percentual_me": _percentual_valor(valor_me, valor_total),
                 "valor_mpe": valor_mpe,
                 "percentual_mpe": _percentual_valor(valor_mpe, valor_total),
+                "mei_discriminado": mpe_disponivel,
+                "estado_mpe": _estado_mpe(mpe_disponivel),
+                "motivo_mpe": _motivo_mpe(mpe_disponivel),
                 "valor_fornecedor_local": valor_local,
                 "percentual_fornecedor_local": _percentual_valor(valor_local, valor_total),
             }
