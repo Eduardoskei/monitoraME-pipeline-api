@@ -188,7 +188,7 @@ def coletar_fornecedores_em_lote(
     """
     Chama `coletar_fornecedor` uma vez para cada CNPJ distinto de `cnpjs`,
     com uma pausa entre chamadas (mesmo padrao de espacamento entre paginas
-    ja usado em pncp.py/tce.py) para nao estourar limite de requisicoes das
+    ja usado nas demais fontes) para nao estourar limite de requisicoes das
     APIs publicas. Duplicatas na lista de entrada sao ignoradas — cada CNPJ
     e consultado uma unica vez, mesmo que apareca em varios contratos.
 

@@ -12,20 +12,15 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
-os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
-os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
 os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
-os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
-os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
 from app.pipeline import merge
 from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
-from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.ingestion import fornecedores, ibge, tce
 
@@ -36,48 +31,6 @@ def _fake_response(payload, status_code: int = 200) -> MagicMock:
     resposta.json.return_value = payload
     resposta.raise_for_status.return_value = None
     return resposta
-
-
-def _tabelas_pncp_com_itens_e_contrato() -> dict[str, pd.DataFrame]:
-    """Contratacao PNCP real (unidadeOrgao + itens + contrato com niFornecedor)."""
-    registro = {
-        "numeroControlePNCP": "12345678000199-1-000005/2025",
-        "anoCompra": 2025,
-        "sequencialCompra": 5,
-        "objetoCompra": "Aquisicao de material de expediente",
-        "valorTotalEstimado": "500,00",
-        "orgaoEntidade": {"cnpj": "12345678000199"},
-        "unidadeOrgao": {"codigoIbge": 2301000, "ufSigla": "CE"},
-        "itens": [
-            {
-                "numeroItem": 1,
-                "descricao": "Caneta esferografica azul",
-                "quantidade": "100",
-                "valorUnitarioEstimado": "1,50",
-                "valorTotal": "150,00",
-                "unidadeMedida": "UN",
-            },
-            {
-                "numeroItem": 2,
-                "descricao": "Lapis grafite",
-                "quantidade": "50",
-                "valorUnitarioEstimado": "0,80",
-                "valorTotal": "40,00",
-                "unidadeMedida": "UN",
-            },
-        ],
-        "contratos": [
-            {
-                # CNPJ do fornecedor vencedor formatado diferente do usado em
-                # limpar_fornecedores — o join precisa normalizar os dois lados.
-                "niFornecedor": "11.444.777/0001-61",
-                "nomeRazaoSocialFornecedor": "Comércio Exemplo LTDA",
-                "valorGlobal": "480,00",
-                "tipoPessoa": "PJ",
-            }
-        ],
-    }
-    return pncp_cleaning.limpar_contratacoes([registro])
 
 
 def _fornecedores_df_valido() -> pd.DataFrame:
@@ -114,27 +67,6 @@ def _municipios_ibge_df() -> pd.DataFrame:
         mock_get.return_value = _fake_response([abaiara])
         registros = ibge.listar_municipios("CE")
     return ibge_cleaning.limpar_municipios(registros)
-
-
-class JuntarItensPncpTest(unittest.TestCase):
-    def test_junta_itens_por_numero_de_controle(self) -> None:
-        tabelas = _tabelas_pncp_com_itens_e_contrato()
-
-        resultado = merge.juntar_itens_pncp(tabelas)
-
-        self.assertEqual(len(resultado), 2)  # 1 contratacao x 2 itens
-        self.assertIn("objeto_compra", resultado.columns)
-        self.assertIn("descricao", resultado.columns)
-        self.assertTrue((resultado["numero_controle_pncp"] == "12345678000199-1-000005/2025").all())
-        self.assertEqual(set(resultado["descricao"]), {"Caneta esferografica azul", "Lapis grafite"})
-
-    def test_sem_tabela_de_itens_devolve_contratacoes_intactas(self) -> None:
-        tabelas = {"contratacoes": pd.DataFrame([{"numero_controle_pncp": "A", "objeto_compra": "X"}])}
-
-        resultado = merge.juntar_itens_pncp(tabelas)
-
-        self.assertEqual(len(resultado), 1)
-        self.assertEqual(resultado.iloc[0]["objeto_compra"], "X")
 
 
 class EnriquecerComFornecedorTest(unittest.TestCase):
@@ -195,9 +127,9 @@ class ExtrairCnpjsDistintosTest(unittest.TestCase):
                 None,
             ]
         )
-        contratos_pncp = pd.Series(["98.765.432/0001-11", None])
+        fornecedores_adicionais = pd.Series(["98.765.432/0001-11", None])
 
-        resultado = merge.extrair_cnpjs_distintos(contratados, contratos_pncp)
+        resultado = merge.extrair_cnpjs_distintos(contratados, fornecedores_adicionais)
 
         self.assertEqual(resultado, ["11444777000161", "98765432000111"])
 
@@ -228,24 +160,6 @@ class ValidarEEnriquecerMunicipioTest(unittest.TestCase):
         self.assertEqual(por_id.loc["A", "municipio_uf"], "CE")
         self.assertTrue(por_id.loc["A", "codigo_ibge_uf_confere"])
         self.assertFalse(por_id.loc["B", "codigo_ibge_uf_confere"])
-
-
-class MontarBasePncpTest(unittest.TestCase):
-    def test_integra_municipio_ibge_e_fornecedor(self) -> None:
-        tabelas = _tabelas_pncp_com_itens_e_contrato()
-        fornecedores_df = _fornecedores_df_valido()
-        municipios = _municipios_ibge_df()
-
-        resultado = merge.montar_base_pncp(
-            tabelas, fornecedores_df=fornecedores_df, municipios_ibge=municipios
-        )
-
-        contratacoes = resultado["contratacoes"]
-        self.assertEqual(contratacoes.iloc[0]["municipio_nome"], "Abaiara")
-        self.assertTrue(contratacoes.iloc[0]["unidade_orgao_codigo_ibge_uf_confere"])
-
-        contratos = resultado["contratos"]
-        self.assertEqual(contratos.iloc[0]["fornecedor_porte_padronizado"], "ME")
 
 
 def _df_tce_contratos() -> pd.DataFrame:
@@ -336,43 +250,6 @@ class JuntarContratosEContratadosTest(unittest.TestCase):
         self.assertNotIn("nome_negociante", resultado.columns)
         self.assertEqual(len(resultado), 2)
 
-
-class UnirPncpETceTest(unittest.TestCase):
-    def test_uniao_preserva_todas_as_colunas_dos_dois_lados(self) -> None:
-        df_pncp = _tabelas_pncp_com_itens_e_contrato()["contratacoes"]
-        df_tce = _df_tce_contratos()
-
-        resultado = merge.unir_pncp_e_tce(df_pncp, df_tce)
-
-        self.assertEqual(len(resultado), 2)
-        self.assertEqual(set(resultado["fonte"]), {"PNCP", "TCE"})
-
-        # nenhuma coluna de nenhum dos dois lados foi descartada
-        for coluna in df_pncp.columns:
-            self.assertIn(coluna, resultado.columns)
-        for coluna in df_tce.columns:
-            self.assertIn(coluna, resultado.columns)
-
-        linha_pncp = resultado[resultado["fonte"] == "PNCP"].iloc[0]
-        linha_tce = resultado[resultado["fonte"] == "TCE"].iloc[0]
-
-        # colunas exclusivas do PNCP ficam vazias na linha do TCE, e vice-versa
-        self.assertEqual(linha_pncp["numero_controle_pncp"], "12345678000199-1-000005/2025")
-        self.assertTrue(pd.isna(linha_tce["numero_controle_pncp"]))
-        self.assertEqual(linha_tce["numero_contrato"], "2025000123")
-        self.assertTrue(pd.isna(linha_pncp["numero_contrato"]))
-
-    def test_um_lado_vazio_devolve_so_o_outro_com_coluna_fonte(self) -> None:
-        df_pncp = _tabelas_pncp_com_itens_e_contrato()["contratacoes"]
-
-        resultado = merge.unir_pncp_e_tce(df_pncp, pd.DataFrame())
-
-        self.assertEqual(len(resultado), 1)
-        self.assertEqual(resultado.iloc[0]["fonte"], "PNCP")
-
-    def test_ambos_vazios_devolve_dataframe_vazio(self) -> None:
-        resultado = merge.unir_pncp_e_tce(pd.DataFrame(), None)
-        self.assertTrue(resultado.empty)
 
 def _fake_response(payload, status_code: int = 200) -> MagicMock:
     resposta = MagicMock()

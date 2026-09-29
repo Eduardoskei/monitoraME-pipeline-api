@@ -1,282 +1,111 @@
 # monitoraME Pipeline API
 
-API em FastAPI para consultar, limpar, enriquecer e analisar dados de contratações públicas a partir do PNCP, TCE-CE, IBGE e OpenCNPJ. O foco atual é apoiar análises de compras públicas e participação de microempresas (ME), especialmente no contexto do Ceará/Amontada.
+API em FastAPI para o módulo analítico retrospectivo do MonitoraME. O serviço coleta despesas empenhadas do TCE-CE, trata anulações, enriquece fornecedores com dados cadastrais e calcula indicadores de participação por porte empresarial, natureza da despesa e origem geográfica.
 
-## O Que Este Projeto Faz
+O módulo usa TCE-CE, IBGE e OpenCNPJ. Dados de editais, dispensas, PCA e demais oportunidades de contratação não fazem parte desta codebase.
 
-- Consulta contratações publicadas no PNCP.
-- Consulta contratos e contratados no TCE-CE.
-- Limpa dados tabulares vindos de JSONs heterogêneos: nomes em `snake_case`, datas ISO, números, nulos e duplicatas.
-- Normaliza e valida CNPJ/CPF sem descartar registros auditáveis.
-- Enriquece municípios com dados oficiais do IBGE.
-- Enriquece fornecedores com dados cadastrais da OpenCNPJ.
-- Calcula indicadores por porte, natureza e origem sobre empenhos líquidos do TCE-CE.
-- Mantém cache em Postgres para municípios IBGE e fornecedores ME.
-- Mantém ingestão incremental PNCP em alta frequência, com checkpoint, upsert idempotente e tabelas analíticas normalizadas.
-- Registra execuções de ingestão TCE-CE em uma tabela de logs no banco configurado por `LOG_DATABASE_URL`.
+## Funcionalidades
 
-## Tree Do Projeto
+- Coleta mensal de notas de empenho e suas anulações no TCE-CE.
+- Paginação da API externa e validação completa da competência antes da publicação.
+- Persistência versionada por município e competência, com substituição atômica do lote publicado.
+- Valores monetários armazenados e agregados como inteiros em centavos.
+- Identificação e enriquecimento cadastral de fornecedores por CNPJ.
+- Classificação pelas sete naturezas de despesa monitoradas.
+- Indicadores por porte, natureza, origem geográfica e fornecedor.
+- Registro separado das execuções de ingestão.
+
+## Fontes de dados
+
+| Fonte | Uso |
+| --- | --- |
+| TCE-CE | Empenhos, anulações, contratos, contratados e municípios. |
+| OpenCNPJ | Porte, município de sede e dados cadastrais dos fornecedores. |
+| IBGE | Catálogo e validação de municípios. |
+
+## Estrutura principal
 
 ```text
-.
-├── .env.example
-├── .gitignore
-├── Pipfile
-├── Pipfile.lock
-├── README.md
-├── requirements.txt
-├── app
-│   ├── __init__.py
-│   ├── main.py
-│   ├── utils.py
-│   ├── api
-│   │   ├── __init__.py
-│   │   ├── router.py
-│   │   └── endpoints
-│   │       ├── __init__.py
-│   │       ├── health.py
-│   │       └── pipeline.py
-│   ├── core
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── logging.py
-│   │   └── log_database.py
-│   └── pipeline
-│       ├── __init__.py
-│       ├── analisys.py
-│       ├── pncp_incremental.py
-│       ├── cleaners
-│       │   ├── __init__.py
-│       │   ├── ibge.py
-│       │   ├── opencnpj.py
-│       │   ├── pncp.py
-│       │   └── tce.py
-│       ├── persistence
-│       │   ├── __init__.py
-│       │   └── pncp.py
-│       ├── kpis.py
-│       ├── merge.py
-│       └── ingestion
-│           ├── __init__.py
-│           ├── pagination.py
-│           ├── fornecedores.py
-│           ├── ibge.py
-│           ├── pncp.py
-│           └── tce.py
-└── tests
-    ├── test_analisys.py
-    ├── test_cleaning.py
-    ├── test_config.py
-    ├── test_database_pncp.py
-    ├── test_fornecedores_ingestion.py
-    ├── test_ibge_ingestion.py
-    ├── test_kpis.py
-    ├── test_logging.py
-    ├── test_log_database.py
-    ├── test_main.py
-    ├── test_merge.py
-    ├── test_pncp_incremental.py
-    ├── test_pncp_ingestion.py
-    ├── test_pncp_persistence.py
-    ├── test_port_pncp.py
-    ├── test_tce_ingestion.py
-    └── test_utils.py
+app/
+├── api/endpoints/       # rotas HTTP e tradução de erros
+├── core/                # configuração, ORM e conexões
+└── pipeline/
+    ├── ingestion/       # clientes TCE-CE, IBGE e OpenCNPJ
+    ├── cleaners/        # normalização por fonte
+    ├── persistence/     # lotes versionados de empenhos e anulações
+    ├── analitico.py     # base canônica de análise
+    ├── analisys.py      # orquestração dos fluxos da API
+    ├── kpis.py          # agregações e indicadores
+    └── tce_despesas.py  # ingestão mensal do TCE-CE
 ```
 
-Arquivos gerados como `__pycache__/`, `.pytest_cache/`, `.venv/` e `.env` ficam fora da árvore acima.
+## Requisitos
 
-## Requerimentos
+- Python 3.14
+- PostgreSQL
+- Acesso às APIs do TCE-CE, IBGE e OpenCNPJ
+- Dependências de `requirements.txt`
 
-Para rodar o projeto localmente:
+## Configuração
 
-- Windows com Git Bash instalado.
-- Python `3.14`.
-- `pip`.
-- Acesso à internet para instalar pacotes e consultar PNCP, TCE-CE, IBGE e OpenCNPJ.
-- Postgres configurado via `DATABASE_URL`, usado para cache local.
-- Postgres configurado via `LOG_DATABASE_URL`, usado para logs de execução da ingestão.
-
-Dependências Python principais:
-
-- `fastapi`
-- `uvicorn[standard]`
-- `pandas`
-- `plotly`
-- `requests`
-- `psycopg[binary]>=3.3,<4`
-- `SQLAlchemy`
-- `alembic`
-- `pydantic`
-- `python-dotenv`
-
-Essas dependências estão declaradas em `requirements.txt`.
-
-## Quick Start No Windows Com Git Bash
-
-### 1. Crie o ambiente virtual
-
-No Git Bash:
-
-```bash
-python -m venv .venv
-source .venv/Scripts/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 2. Configure as variáveis de ambiente
+Crie o arquivo local de ambiente:
 
 ```bash
 cp .env.example .env
 ```
 
-Revise o `.env` se precisar trocar URLs, UF padrão, município padrão ou credenciais de Postgres. O arquivo `.env` não deve ser versionado.
-
-Variáveis esperadas:
+Variáveis usadas pela aplicação:
 
 | Variável | Obrigatória | Uso |
 | --- | --- | --- |
-| `DATABASE_URL` | Sim | Conexão obrigatória com o Postgres usado pelo cache local. |
-| `LOG_DATABASE_URL` | Sim | Conexão obrigatória com o Postgres usado pela tabela `logs_ingestao`. |
-| `DATABASE_SSLMODE` | Não | Modo SSL do Postgres. Padrão: `require`. |
-| `LOG_DATABASE_SSLMODE` | Não | Modo SSL do Postgres de logs. Se ausente, usa `DATABASE_SSLMODE` ou `require`. |
-| `TCE_CE_BASE_URL` | Sim | Base da API de dados abertos do TCE-CE. |
-| `IBGE_LOCALIDADES_BASE_URL` | Sim | Base da API de localidades do IBGE. |
-| `PNCP_CONSULTA_BASE_URL` | Sim | Base da API de consulta do PNCP. |
-| `PNCP_GESTAO_BASE_URL` | Sim | Base da API de gestão/detalhes do PNCP. |
-| `OPENCNPJ_BASE_URL` | Sim | Base da API OpenCNPJ. |
-| `UF_PADRAO` | Sim | UF usada como filtro padrão. |
-| `CODIGO_IBGE_PADRAO` | Sim | Código IBGE padrão do município. |
-| `CODIGO_MUNICIPIO_TCE_PADRAO` | Sim | Código interno do município no TCE-CE. |
-| `MODALIDADE_ID_PADRAO` | Sim | Modalidade padrão usada na consulta PNCP. |
-| `PNCP_MODALIDADES_INCREMENTAIS` | Não | Lista de modalidades PNCP separadas por vírgula para a rotina incremental. Padrão: `MODALIDADE_ID_PADRAO`. |
-| `PNCP_UFS_INCREMENTAIS` | Não | Lista de UFs separadas por vírgula para a rotina incremental. Padrão: `UF_PADRAO`. |
-| `PNCP_JANELA_INICIAL_HORAS` | Não | Janela usada quando ainda não há checkpoint válido. Padrão: `6`. |
+| `DATABASE_URL` | Sim | Banco principal com caches e lotes analíticos. |
+| `LOG_DATABASE_URL` | Sim | Banco da tabela `logs_ingestao`. |
+| `DATABASE_SSLMODE` | Não | Modo SSL do banco principal; padrão `require`. |
+| `LOG_DATABASE_SSLMODE` | Não | Modo SSL do banco de logs. |
+| `TCE_CE_BASE_URL` | Sim | API de dados abertos do TCE-CE. |
+| `IBGE_LOCALIDADES_BASE_URL` | Sim | API de localidades do IBGE. |
+| `OPENCNPJ_BASE_URL` | Sim | API cadastral OpenCNPJ. |
+| `UF_PADRAO` | Sim | UF compradora usada pela análise. |
+| `CODIGO_MUNICIPIO_TCE_PADRAO` | Sim | Código interno padrão do município no TCE-CE. |
 
-Valores padrão atuais em `.env.example`:
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/monitorame
-LOG_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/monitorame_logs
-DATABASE_SSLMODE=require
-UF_PADRAO=CE
-CODIGO_IBGE_PADRAO=2304400
-CODIGO_MUNICIPIO_TCE_PADRAO=010
-MODALIDADE_ID_PADRAO=6
-PNCP_MODALIDADES_INCREMENTAIS=6
-PNCP_UFS_INCREMENTAIS=CE
-PNCP_JANELA_INICIAL_HORAS=6
-```
-
-### 3. Rode as migrations
-
-O banco principal (`DATABASE_URL`) e o banco de logs (`LOG_DATABASE_URL`) usam ambientes Alembic separados:
+## Execução local
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 alembic upgrade head
 alembic -n logs upgrade head
-```
-
-Na fase atual de transição, o lifespan da API valida as conexões dos bancos ao subir. Novas alterações de schema devem ser feitas por migrations.
-As URLs `postgresql://...` sao normalizadas internamente para `postgresql+psycopg://...`, usando o driver `psycopg` v3 com SQLAlchemy.
-
-### 4. Rode a API
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-Acesse:
+No Windows com Git Bash, ative o ambiente com `source .venv/Scripts/activate`.
 
-- API: `http://127.0.0.1:8000`
-- Swagger/OpenAPI: `http://127.0.0.1:8000/docs`
+A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 
-## Fluxo Interno
+## Rotas do pipeline
 
-```text
-Fontes externas
-  ├─ PNCP
-  ├─ TCE-CE
-  ├─ IBGE
-  └─ OpenCNPJ
-        ↓
-app/pipeline/ingestion
-        ↓
-app/pipeline/cleaners
-        ↓
-app/pipeline/merge
-        ↓
-app/pipeline/persistence
-        ↓
-app/pipeline/kpis
-        ↓
-app/pipeline/analisys
-        ↓
-app/api/endpoints
-```
+- `GET /pipeline/tce/contratos`: consulta e enriquece contratos do TCE-CE.
+- `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
+- `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
 
-Responsabilidades por módulo:
+As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
 
-- `app/main.py`: cria a aplicação FastAPI, registra rotas e valida/fecha conexões Postgres durante o lifespan.
-- `app/api/endpoints/`: define os endpoints HTTP e traduz erros de domínio em códigos HTTP.
-- `app/core/config.py`: carrega variáveis de ambiente obrigatórias via `python-dotenv`.
-- `app/core/database.py`: concentra o acesso ORM ao banco principal.
-- `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
-- `app/pipeline/pncp_incremental.py`: orquestra a carga incremental PNCP acionada pela rota da API.
-- `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente via SQLAlchemy.
-- `app/pipeline/tce_despesas.py`: coleta e publica mensalmente empenhos e anulações do TCE-CE.
-- `app/pipeline/persistence/tce_despesas.py`: mantém lotes versionados e fornece empenhos líquidos aos indicadores.
-- `app/utils.py`: concentra funções utilitárias compartilhadas, incluindo o motor genérico de normalização de estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
-- `app/pipeline/cleaners/pncp.py`, `tce.py`, `ibge.py` e `opencnpj.py`: aplicam as regras de limpeza específicas de cada API.
-- `app/pipeline/merge.py`: cruza tabelas limpas entre fontes e aplica enriquecimentos.
-- `app/pipeline/kpis.py`: calcula agregações e KPIs sobre bases já limpas/enriquecidas.
-- `app/pipeline/analisys.py`: orquestra os fluxos completos usados pela API e serializa DataFrames para JSON.
+## Persistência
 
-## Cache Postgres
+O banco principal mantém:
 
-O Postgres é obrigatório para a API subir. `DATABASE_URL` precisa estar preenchida no ambiente ou no `.env`; se estiver ausente/vazia, a configuração falha na inicialização. O schema é gerenciado por Alembic e, durante esta etapa de transição, o lifespan valida a conexão antes de encerrar o pool ao desligar.
+- `ibge_municipios` e `fornecedores_me`, usados como caches;
+- `tce_despesa_ingestion_runs`, com o estado de cada carga mensal;
+- `tce_empenhos`, com as notas de empenho versionadas por lote;
+- `tce_anulacoes_empenhos`, com as anulações vinculadas aos empenhos.
 
-O cache mantém:
+O banco de logs mantém `logs_ingestao`. Os dois bancos usam ambientes Alembic independentes.
 
-- `ibge_municipios`: código, nome e UF de municípios.
-- `fornecedores_me`: CNPJs de fornecedores confirmados como ME.
+A migration `0003_remove_pncp` exclui as antigas tabelas do módulo de oportunidades. A aplicação dessa migration remove definitivamente os dados existentes nessas tabelas.
 
-As integrações com IBGE e OpenCNPJ usam esse cache para reduzir chamadas externas e reaproveitar dados já consultados.
-
-## Ingestão Incremental PNCP
-
-A ingestão incremental PNCP é acionada apenas pela rota da API. Quando ainda não há checkpoint válido, a primeira execução consulta a janela fixa configurada em `PNCP_JANELA_INICIAL_HORAS`, com padrão de 6 horas.
-
-O escopo inicial acompanha todos os municípios do Ceará (`PNCP_UFS_INCREMENTAIS=CE`) e a modalidade `6` (`PNCP_MODALIDADES_INCREMENTAIS=6`). Para expansão futura, as duas variáveis aceitam listas separadas por vírgula.
-
-A carga usa como controle temporal os campos `dataPublicacaoPncp`, `dataAtualizacao` e `dataAtualizacaoGlobal`. Como alguns endpoints do PNCP retornam apenas data sem horário, a rotina reconsulta o dia do checkpoint e depende do upsert por identificadores oficiais para evitar duplicidade.
-
-Tabelas gerenciadas no `DATABASE_URL`:
-
-- `pncp_ingestion_state`: checkpoint por escopo.
-- `pncp_ingestion_runs`: controle de execução com horário, janela, status, quantidades e erro.
-- `pncp_contratacoes`, `pncp_itens`, `pncp_resultados`, `pncp_contratos`: dados normalizados de contratações PNCP.
-- `pncp_pca_planos`, `pncp_pca_itens`: planos e itens do PCA.
-- `pncp_fornecedores`: dados cadastrais dos fornecedores consultados via OpenCNPJ.
-
-O checkpoint só avança depois que a extração, padronização, deduplicação, classificação, persistência e registro de execução terminam com sucesso. Em caso de falha, a execução é registrada como `falha` e a próxima rodada reprocessa a mesma janela.
-
-Acionamento:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/pipeline/pncp/ingestao-incremental"
-```
-
-## Logs De Ingestão TCE-CE
-
-A ingestão TCE-CE grava uma linha por execução das funções públicas de coleta (`buscar_contratos`, `buscar_contratados`, `buscar_contratacoes`, `buscar_itens_contratacao` e `buscar_municipios`) na tabela `logs_ingestao`, gerenciada pelo ambiente Alembic `logs` no banco apontado por `LOG_DATABASE_URL`.
-
-Cada registro inclui fonte, etapa, status, data/hora de início e término, quantidade de registros processados, quantidade de falhas ocorridas, parâmetros da execução, totais em JSONB e mensagem de erro quando houver.
-
-## Rodando Testes
-
-Use descoberta explícita:
+## Testes
 
 ```bash
 python -m unittest discover -s tests

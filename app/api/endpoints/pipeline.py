@@ -1,9 +1,8 @@
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
-from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import analisys, pncp_incremental
+from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO
+from app.pipeline import analisys
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
-from app.pipeline.ingestion.pncp import PncpIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
 from app.utils import DATA_ISO_FORMATO, normalizar_data_iso
@@ -42,7 +41,6 @@ def _erro_pipeline(error: Exception) -> HTTPException:
     if isinstance(
         error,
         (
-            PncpIndisponivelError,
             FonteCadastralIndisponivelError,
             analisys.CompetenciasTceIndisponiveisError,
             tce.TceIndisponivelError,
@@ -50,89 +48,6 @@ def _erro_pipeline(error: Exception) -> HTTPException:
     ):
         return HTTPException(status_code=503, detail=str(error))
     return HTTPException(status_code=500, detail="Falha inesperada ao executar o pipeline.")
-
-
-@router.get(
-    "/pncp/contratacoes",
-    summary="Consulta contratacoes publicadas no PNCP",
-    description="Executa o fluxo de ingestao, limpeza e enriquecimento das contratacoes publicadas no PNCP.",
-    response_description="Tabelas processadas, totais e metadados da consulta PNCP.",
-)
-def pncp_contratacoes(
-    data_inicial: Annotated[str, _data_inicial_query()],
-    data_final: Annotated[str, _data_final_query()],
-    modalidade_id: Annotated[
-        int,
-        Query(description="Identificador da modalidade no PNCP.", ge=1),
-    ] = MODALIDADE_ID_PADRAO,
-    uf: Annotated[
-        str | None,
-        Query(description="UF usada como filtro e enriquecimento.", min_length=2, max_length=2),
-    ] = UF_PADRAO,
-    codigo_municipio_ibge: Annotated[
-        str | None,
-        Query(description="Codigo IBGE do municipio consultado."),
-    ] = None,
-    cnpj_orgao: Annotated[
-        str | None,
-        Query(description="CNPJ do orgao responsavel pela contratacao."),
-    ] = None,
-    max_paginas: Annotated[
-        int | None,
-        Query(description="Quantidade maxima de paginas consultadas no PNCP.", ge=1),
-    ] = 1,
-    incluir_detalhes: Annotated[
-        bool,
-        Query(description="Inclui detalhes completos de compras, itens e contratos."),
-    ] = False,
-    enriquecer_municipios: Annotated[
-        bool,
-        Query(description="Enriquece os dados com municipios do IBGE."),
-    ] = True,
-    enriquecer_fornecedores: Annotated[
-        bool,
-        Query(description="Enriquece os dados com informacoes cadastrais dos fornecedores."),
-    ] = False,
-    limite: Annotated[
-        int | None,
-        Query(description="Limite de registros por tabela retornada.", ge=1, le=1000),
-    ] = 100,
-) -> dict[str, object]:
-    try:
-        _validar_periodo_api(data_inicial, data_final)
-        return analisys.consultar_pncp_contratacoes(
-            data_inicial=data_inicial,
-            data_final=data_final,
-            modalidade_id=modalidade_id,
-            uf=uf,
-            codigo_municipio_ibge=codigo_municipio_ibge,
-            cnpj_orgao=cnpj_orgao,
-            max_paginas=max_paginas,
-            incluir_detalhes=incluir_detalhes,
-            enriquecer_municipios=enriquecer_municipios,
-            enriquecer_fornecedores=enriquecer_fornecedores,
-            limite=limite,
-        )
-    except Exception as error:
-        raise _erro_pipeline(error) from error
-
-
-@router.post(
-    "/pncp/ingestao-incremental",
-    summary="Executa a ingestao incremental PNCP",
-    description="Coleta e persiste dados PNCP novos ou atualizados desde o ultimo checkpoint valido.",
-    response_description="Resumo de controle da execucao incremental PNCP.",
-)
-def pncp_ingestao_incremental(
-    max_paginas: Annotated[
-        int | None,
-        Query(description="Quantidade maxima de paginas consultadas por chamada PNCP.", ge=1),
-    ] = None,
-) -> dict[str, object]:
-    try:
-        return pncp_incremental.executar_ingestao_incremental_pncp(max_paginas=max_paginas)
-    except Exception as error:
-        raise _erro_pipeline(error) from error
 
 
 @router.get(

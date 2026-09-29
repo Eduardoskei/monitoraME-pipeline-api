@@ -1,15 +1,13 @@
 from datetime import date
 from typing import Any
 import pandas as pd
-from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
-from app.pipeline import analitico, kpis, merge, pncp_incremental
+from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
+from app.pipeline import analitico, kpis, merge
 from app.pipeline import tce_despesas as tce_despesas_pipeline
-from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
-from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.enrichment.fornecedores import enriquecer_com_fornecedor, extrair_cnpjs_distintos
-from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
+from app.pipeline.ingestion import fornecedores, tce
 from app.pipeline.persistence import tce_despesas as tce_despesas_persistence
 
 
@@ -118,24 +116,6 @@ def _resolver_nome_municipio_tce(codigo_municipio: str) -> str:
     )
 
 
-def _contratos_pncp_completos(registros: list[dict[str, Any]]) -> pd.Series | None:
-    if not any(isinstance(registro.get("contratos"), list) for registro in registros):
-        return None
-
-    return pd.Series(
-        [
-            contrato.get("niFornecedor")
-            for registro in registros
-            for contrato in registro.get("contratos", [])
-            if isinstance(contrato, dict)
-        ]
-    )
-
-
-def _montar_registro_pncp_completo(publicacao: dict[str, Any]) -> dict[str, Any]:
-    return pncp.montar_registro_compra_completo(publicacao)
-
-
 def _coletar_fornecedores(cnpjs: list[str], throttle_segundos: float) -> pd.DataFrame | None:
     if not cnpjs:
         return None
@@ -202,85 +182,6 @@ def _atualizar_competencias_tce(
             f"Nenhuma competência do TCE-CE pôde ser atualizada: {meses}."
         )
     return publicadas, falhas
-
-
-def montar_base_pncp(
-    data_inicial: str,
-    data_final: str,
-    *,
-    modalidade_id: int = MODALIDADE_ID_PADRAO,
-    uf: str | None = UF_PADRAO,
-    codigo_municipio_ibge: str | int | None = None,
-    cnpj_orgao: str | None = None,
-    max_paginas: int | None = 1,
-    incluir_detalhes: bool = False,
-    enriquecer_municipios: bool = True,
-    enriquecer_fornecedores: bool = False,
-    throttle_fornecedores: float = 0.3,
-) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
-    publicacoes = pncp.buscar_contratacoes_publicadas(
-        data_inicial,
-        data_final,
-        modalidade_id=modalidade_id,
-        uf=uf,
-        codigo_municipio_ibge=codigo_municipio_ibge,
-        cnpj_orgao=cnpj_orgao,
-        max_paginas=max_paginas,
-    )
-    registros = (
-        [_montar_registro_pncp_completo(publicacao) for publicacao in publicacoes]
-        if incluir_detalhes
-        else publicacoes
-    )
-
-    tabelas_limpas = pncp_cleaning.limpar_contratacoes(registros)
-    tabelas_filtradas = pncp_incremental.filtrar_contratacoes_por_codigo_despesa(tabelas_limpas)
-    tabelas = {nome: tabelas_filtradas[nome] for nome in tabelas_limpas}
-
-    municipios_df = None
-    if enriquecer_municipios:
-        municipios_df = ibge_cleaning.limpar_municipios(ibge.listar_municipios(uf or UF_PADRAO))
-
-    fornecedores_df = None
-    if enriquecer_fornecedores:
-        contratos = tabelas.get("contratos")
-        serie_cnpj = contratos["ni_fornecedor"] if contratos is not None and "ni_fornecedor" in contratos else None
-        cnpjs = extrair_cnpjs_distintos(serie_cnpj, _contratos_pncp_completos(registros))
-        fornecedores_df = _coletar_fornecedores(cnpjs, throttle_fornecedores)
-
-    tabelas = merge.montar_base_pncp(
-        tabelas,
-        fornecedores_df=fornecedores_df,
-        municipios_ibge=municipios_df,
-    )
-
-    metadados = {
-        "fonte": "PNCP",
-        "parametros": {
-            "data_inicial": data_inicial,
-            "data_final": data_final,
-            "modalidade_id": modalidade_id,
-            "uf": uf,
-            "codigo_municipio_ibge": codigo_municipio_ibge,
-            "cnpj_orgao": cnpj_orgao,
-            "max_paginas": max_paginas,
-            "incluir_detalhes": incluir_detalhes,
-            "enriquecer_municipios": enriquecer_municipios,
-            "enriquecer_fornecedores": enriquecer_fornecedores,
-        },
-        "totais_brutos": {"publicacoes": len(publicacoes)},
-    }
-    return tabelas, metadados
-
-
-def consultar_pncp_contratacoes(*, limite: int | None = 100, **kwargs: Any) -> dict[str, Any]:
-    tabelas, metadados = montar_base_pncp(**kwargs)
-    return {
-        **metadados,
-        "limite_resposta": limite,
-        "totais": _totais_tabelas(tabelas),
-        "tabelas": tabelas_para_json(tabelas, limite=limite),
-    }
 
 
 def montar_base_tce_contratos(

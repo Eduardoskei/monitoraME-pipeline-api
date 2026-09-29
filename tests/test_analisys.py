@@ -12,13 +12,9 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
-os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
-os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
 os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
-os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
-os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
@@ -51,56 +47,6 @@ class SerializacaoJsonTest(unittest.TestCase):
                 }
             ],
         )
-
-
-class ConsultarPncpContratacoesTest(unittest.TestCase):
-    @patch("app.pipeline.analisys.ibge.listar_municipios")
-    @patch("app.pipeline.analisys.pncp.buscar_contratacoes_publicadas")
-    def test_retorna_tabelas_limpas_e_municipio_enriquecido(self, buscar_pncp, listar_municipios) -> None:
-        buscar_pncp.return_value = [
-            {
-                "numeroControlePNCP": "11444777000161-1-000001/2025",
-                "anoCompra": 2025,
-                "sequencialCompra": 1,
-                "objetoCompra": "  Material escolar  ",
-                "codigoElementoDespesa": "33903000",
-                "valorTotalEstimado": "1.250,50",
-                "unidadeOrgao": {"codigoIbge": 2301000, "ufSigla": "CE"},
-            },
-            {
-                "numeroControlePNCP": "11444777000161-1-000002/2025",
-                "anoCompra": 2025,
-                "sequencialCompra": 2,
-                "objetoCompra": "Material de consumo sem codigo",
-                "valorTotalEstimado": "900,00",
-                "unidadeOrgao": {"codigoIbge": 2301000, "ufSigla": "CE"},
-            },
-        ]
-        listar_municipios.return_value = [
-            {
-                "id": 2301000,
-                "nome": "Abaiara",
-                "microrregiao": {
-                    "mesorregiao": {
-                        "UF": {"sigla": "CE"},
-                    }
-                },
-            }
-        ]
-
-        resposta = analisys.consultar_pncp_contratacoes(
-            data_inicial="2025-01-01",
-            data_final="2025-01-31",
-            max_paginas=1,
-        )
-
-        self.assertEqual(resposta["fonte"], "PNCP")
-        self.assertEqual(resposta["totais"], {"contratacoes": 1})
-        registro = resposta["tabelas"]["contratacoes"][0]
-        self.assertEqual(registro["objeto_compra"], "Material escolar")
-        self.assertEqual(registro["valor_total_estimado"], 1250.5)
-        self.assertEqual(registro["municipio_nome"], "Abaiara")
-        self.assertTrue(registro["unidade_orgao_codigo_ibge_uf_confere"])
 
 
 class ConsultarTceContratosTest(unittest.TestCase):

@@ -84,6 +84,35 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_remove_tabelas_do_modulo_pncp(self) -> None:
+        migration = (
+            ROOT
+            / "alembic"
+            / "main"
+            / "versions"
+            / "0003_remove_pncp.py"
+        )
+        modulo = _carregar_migration(migration)
+
+        self.assertEqual(modulo.revision, "0003_remove_pncp")
+        self.assertEqual(modulo.down_revision, "0002_tce_despesas")
+        self.assertEqual(
+            set(modulo.PNCP_TABLES),
+            {
+                "pncp_ingestion_state",
+                "pncp_ingestion_runs",
+                "pncp_contratacoes",
+                "pncp_itens",
+                "pncp_resultados",
+                "pncp_contratos",
+                "pncp_pca_planos",
+                "pncp_pca_itens",
+                "pncp_fornecedores",
+            },
+        )
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
 
 if __name__ == "__main__":
     unittest.main()
