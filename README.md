@@ -10,7 +10,7 @@ API em FastAPI para consultar, limpar, enriquecer e analisar dados de contrataç
 - Normaliza e valida CNPJ/CPF sem descartar registros auditáveis.
 - Enriquece municípios com dados oficiais do IBGE.
 - Enriquece fornecedores com dados cadastrais da OpenCNPJ.
-- Calcula KPI de participação mensal de ME em contratos do TCE-CE.
+- Calcula indicadores por porte, natureza e origem sobre empenhos líquidos do TCE-CE.
 - Mantém cache em Postgres para municípios IBGE e fornecedores ME.
 - Mantém ingestão incremental PNCP em alta frequência, com checkpoint, upsert idempotente e tabelas analíticas normalizadas.
 - Registra execuções de ingestão TCE-CE em uma tabela de logs no banco configurado por `LOG_DATABASE_URL`.
@@ -225,6 +225,8 @@ Responsabilidades por módulo:
 - `app/pipeline/ingestion/`: encapsula chamadas HTTP para PNCP, TCE-CE, IBGE e OpenCNPJ.
 - `app/pipeline/pncp_incremental.py`: orquestra a carga incremental PNCP acionada pela rota da API.
 - `app/pipeline/persistence/pncp.py`: grava as tabelas normalizadas PNCP com upsert idempotente via SQLAlchemy.
+- `app/pipeline/tce_despesas.py`: coleta e publica mensalmente empenhos e anulações do TCE-CE.
+- `app/pipeline/persistence/tce_despesas.py`: mantém lotes versionados e fornece empenhos líquidos aos indicadores.
 - `app/utils.py`: concentra funções utilitárias compartilhadas, incluindo o motor genérico de normalização de estruturas, colunas, tipos, datas, documentos, nulos e duplicatas.
 - `app/pipeline/cleaners/pncp.py`, `tce.py`, `ibge.py` e `opencnpj.py`: aplicam as regras de limpeza específicas de cada API.
 - `app/pipeline/merge.py`: cruza tabelas limpas entre fontes e aplica enriquecimentos.

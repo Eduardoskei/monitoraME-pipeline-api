@@ -24,6 +24,7 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 from fastapi import HTTPException
 
 from app import main
+from app.pipeline import analisys
 from app.pipeline.ingestion import pncp
 
 
@@ -83,7 +84,8 @@ class MainTest(unittest.TestCase):
         self.assertIn("/pipeline/pncp/contratacoes", rotas)
         self.assertIn("/pipeline/pncp/ingestao-incremental", rotas)
         self.assertIn("/pipeline/tce/contratos", rotas)
-        self.assertIn("/pipeline/tce/kpis/me-por-mes", rotas)
+        self.assertNotIn("/pipeline/tce/kpis/me-por-mes", rotas)
+        self.assertIn("/pipeline/tce/kpis/portes-por-mes", rotas)
         self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
 
     @patch("app.main.database.close_pool")
@@ -190,7 +192,7 @@ class MainTest(unittest.TestCase):
         for endpoint in (
             main.pncp_contratacoes,
             main.tce_contratos,
-            main.tce_kpi_me_por_mes,
+            main.tce_kpi_portes_por_mes,
             main.tce_analitico_indicadores,
         ):
             with self.subTest(endpoint=endpoint.__name__):
@@ -199,6 +201,24 @@ class MainTest(unittest.TestCase):
 
                 self.assertEqual(contexto.exception.status_code, 422)
                 self.assertIn("YYYY-MM-DD", contexto.exception.detail)
+
+    @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
+    def test_endpoint_analitico_mapeia_falha_total_de_competencias_para_503(
+        self,
+        consultar_indicadores,
+    ) -> None:
+        consultar_indicadores.side_effect = analisys.CompetenciasTceIndisponiveisError(
+            "Nenhuma competência disponível."
+        )
+
+        with self.assertRaises(HTTPException) as contexto:
+            main.tce_analitico_indicadores(
+                data_inicial="2025-01-01",
+                data_final="2025-01-31",
+            )
+
+        self.assertEqual(contexto.exception.status_code, 503)
+        self.assertEqual(contexto.exception.detail, "Nenhuma competência disponível.")
 
     @patch("app.api.endpoints.pipeline.pncp_incremental.executar_ingestao_incremental_pncp")
     def test_endpoint_pncp_ingestao_incremental_retorna_resumo(self, executar_ingestao) -> None:

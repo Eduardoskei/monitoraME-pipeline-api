@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 import sys
 import unittest
+import json
+from decimal import Decimal
 import requests
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -25,6 +27,58 @@ from app.pipeline.ingestion import tce
 
 
 class TceIngestionTest(unittest.TestCase):
+    def test_parametros_competencia_tce_converte_para_formato_dcd(self) -> None:
+        self.assertEqual(
+            tce.parametros_competencia_tce("2025-01", "010"),
+            {
+                "codigo_municipio": "010",
+                "exercicio_orcamento": 202500,
+                "data_referencia_doc": 202501,
+            },
+        )
+
+    def test_parametros_competencia_tce_rejeita_mes_invalido(self) -> None:
+        with self.assertRaisesRegex(ValueError, "YYYY-MM"):
+            tce.parametros_competencia_tce("2025-13", "010")
+
+    @patch("app.pipeline.ingestion.tce.requests.get")
+    def test_buscar_dados_tce_preserva_decimal_quando_solicitado(self, get) -> None:
+        resposta = MagicMock()
+        resposta.status_code = 200
+        resposta.raise_for_status.return_value = None
+        resposta.json.side_effect = lambda **kwargs: json.loads(
+            '{"elements":[{"valor_empenhado":1.005}]}',
+            **kwargs,
+        )
+        get.return_value = resposta
+
+        resultado = tce.buscar_dados_tce(
+            "notas_empenhos",
+            {"codigo_municipio": "010"},
+            preservar_decimais=True,
+        )
+
+        self.assertEqual(resultado["elements"][0]["valor_empenhado"], Decimal("1.005"))
+
+    @patch("app.pipeline.ingestion.tce.registrar_falha_ingestao")
+    @patch("app.pipeline.ingestion.tce.requests.get")
+    def test_buscar_dados_tce_critico_nao_converte_indisponibilidade_em_lista_vazia(
+        self,
+        get,
+        registrar_falha,
+    ) -> None:
+        get.side_effect = requests.Timeout("tempo esgotado")
+
+        with self.assertRaises(tce.TceIndisponivelError):
+            tce.buscar_dados_tce(
+                "notas_empenhos",
+                {"codigo_municipio": "010"},
+                max_retries=0,
+                falhar_ao_esgotar=True,
+            )
+
+        registrar_falha.assert_called_once()
+
     def test_normalizar_data_tce_aceita_apenas_iso(self) -> None:
         self.assertEqual(tce.normalizar_data_tce("2025-01-07"), "2025-01-07")
         with self.assertRaisesRegex(ValueError, "YYYY-MM-DD"):
@@ -145,6 +199,59 @@ class TceIngestionTest(unittest.TestCase):
 
         self.assertEqual(registros, [{"codigo_municipio": "010", "nome_municipio": "Amontada"}])
         registrar_log_ingestao.assert_called_once()
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.listar_registros")
+    def test_buscar_notas_empenhos_usa_contrato_dcd(
+        self,
+        listar_registros,
+        registrar_log_ingestao,
+    ) -> None:
+        listar_registros.return_value = [{"numero_empenho": "31010002"}]
+
+        registros = tce.buscar_notas_empenhos("2025-01", codigo_municipio="010")
+
+        self.assertEqual(registros, [{"numero_empenho": "31010002"}])
+        listar_registros.assert_called_once_with(
+            "notas_empenhos",
+            {
+                "codigo_municipio": "010",
+                "exercicio_orcamento": 202500,
+                "data_referencia_doc": 202501,
+            },
+            filtrar_por_codigo_despesa=False,
+            preservar_decimais=True,
+            falhar_ao_esgotar=True,
+        )
+        self.assertEqual(registrar_log_ingestao.call_args.kwargs["etapa"], "buscar_notas_empenhos")
+
+    @patch("app.core.logging.log_database.registrar_log_ingestao")
+    @patch("app.pipeline.ingestion.tce.listar_registros")
+    def test_buscar_notas_anulacoes_empenhos_usa_contrato_dcd(
+        self,
+        listar_registros,
+        registrar_log_ingestao,
+    ) -> None:
+        listar_registros.return_value = [{"numero_nota_anulacao": "10010001"}]
+
+        registros = tce.buscar_notas_anulacoes_empenhos("2025-01", codigo_municipio="010")
+
+        self.assertEqual(registros, [{"numero_nota_anulacao": "10010001"}])
+        listar_registros.assert_called_once_with(
+            "notas_anulacoes_empenhos",
+            {
+                "codigo_municipio": "010",
+                "exercicio_orcamento": 202500,
+                "data_referencia_doc": 202501,
+            },
+            filtrar_por_codigo_despesa=False,
+            preservar_decimais=True,
+            falhar_ao_esgotar=True,
+        )
+        self.assertEqual(
+            registrar_log_ingestao.call_args.kwargs["etapa"],
+            "buscar_notas_anulacoes_empenhos",
+        )
 
     @patch("app.core.logging.log_database.registrar_log_ingestao")
     @patch("app.pipeline.ingestion.tce.listar_registros")

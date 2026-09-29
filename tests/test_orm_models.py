@@ -43,6 +43,9 @@ class OrmMetadataTest(unittest.TestCase):
             "pncp_pca_planos",
             "pncp_pca_itens",
             "pncp_fornecedores",
+            "tce_despesa_ingestion_runs",
+            "tce_empenhos",
+            "tce_anulacoes_empenhos",
         }
 
         self.assertEqual(set(orm.MainBase.metadata.tables), esperado)
@@ -62,6 +65,26 @@ class OrmMetadataTest(unittest.TestCase):
 
         self.assertEqual(fk.column.table.name, "pncp_contratacoes")
         self.assertEqual(fk.ondelete, "CASCADE")
+
+    def test_modelos_tce_preservam_versoes_e_valores_em_centavos(self) -> None:
+        run = models.TceDespesaIngestionRun.__table__
+        empenho = models.TceEmpenho.__table__
+        anulacao = models.TceAnulacaoEmpenho.__table__
+
+        indice_publicado = next(
+            indice
+            for indice in run.indexes
+            if indice.name == "uq_tce_despesa_run_publicado_competencia"
+        )
+        self.assertTrue(indice_publicado.unique)
+        self.assertEqual(
+            str(indice_publicado.dialect_options["postgresql"]["where"]),
+            "status = 'PUBLICADO'",
+        )
+        self.assertEqual(empenho.c.valor_empenhado_centavos.type.python_type, int)
+        self.assertEqual(anulacao.c.valor_anulacao_centavos.type.python_type, int)
+        self.assertEqual(next(iter(empenho.c.run_id.foreign_keys)).ondelete, "CASCADE")
+        self.assertEqual(next(iter(anulacao.c.run_id.foreign_keys)).ondelete, "CASCADE")
 
     def test_log_metadata_registra_apenas_tabela_de_logs(self) -> None:
         self.assertEqual(set(orm.LogBase.metadata.tables), {"logs_ingestao"})

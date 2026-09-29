@@ -4,6 +4,7 @@ from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, U
 from app.pipeline import analisys, pncp_incremental
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion.pncp import PncpIndisponivelError
+from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
 from app.utils import DATA_ISO_FORMATO, normalizar_data_iso
 
@@ -38,7 +39,15 @@ def _validar_periodo_api(data_inicial: str, data_final: str) -> None:
 def _erro_pipeline(error: Exception) -> HTTPException:
     if isinstance(error, (ValueError, TypeError, DadosInsuficientesKPI)):
         return HTTPException(status_code=422, detail=str(error))
-    if isinstance(error, (PncpIndisponivelError, FonteCadastralIndisponivelError)):
+    if isinstance(
+        error,
+        (
+            PncpIndisponivelError,
+            FonteCadastralIndisponivelError,
+            analisys.CompetenciasTceIndisponiveisError,
+            tce.TceIndisponivelError,
+        ),
+    ):
         return HTTPException(status_code=503, detail=str(error))
     return HTTPException(status_code=500, detail="Falha inesperada ao executar o pipeline.")
 
@@ -162,40 +171,11 @@ def tce_contratos(
 
 
 @router.get(
-    "/tce/kpis/me-por-mes",
-    summary="Calcula participacao de ME por mes",
-    description="Calcula a participacao mensal de microempresas nos contratos do TCE-CE.",
-    response_description="Serie mensal do KPI, totais e metadados da consulta TCE-CE.",
-)
-def tce_kpi_me_por_mes(
-    data_inicial: Annotated[str, _data_inicial_query()],
-    data_final: Annotated[str, _data_final_query()],
-    codigo_municipio: Annotated[
-        str,
-        Query(description="Codigo do municipio no TCE-CE."),
-    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
-    limite: Annotated[
-        int | None,
-        Query(description="Limite de periodos retornados.", ge=1, le=1000),
-    ] = 100,
-) -> dict[str, object]:
-    try:
-        _validar_periodo_api(data_inicial, data_final)
-        return analisys.consultar_kpi_tce_me_por_mes(
-            data_inicial=data_inicial,
-            data_final=data_final,
-            codigo_municipio=codigo_municipio,
-            limite=limite,
-        )
-    except Exception as error:
-        raise _erro_pipeline(error) from error
-
-@router.get(
     "/tce/kpis/portes-por-mes",
     summary="Calcula participação por porte empresarial por mês",
     description=(
-        "Calcula quantidade, valor e percentual mensal de "
-        "MEI, ME, EPP, demais e fornecedores não identificados."
+        "Atualiza as competências solicitadas e calcula quantidade, valor líquido "
+        "empenhado e percentual mensal de MEI, ME, EPP, demais e não identificados."
     ),
     response_description=(
         "Série mensal por porte, totais e metadados do TCE-CE."
@@ -232,7 +212,8 @@ def tce_kpi_portes_por_mes(
     "/tce/analitico/indicadores",
     summary="Calcula indicadores analiticos principais do TCE-CE",
     description=(
-        "Calcula os principais indicadores analiticos sobre a base canonica do TCE-CE. "
+        "Atualiza as competências solicitadas e calcula os indicadores sobre "
+        "empenhos líquidos publicados do TCE-CE. "
         "O municipio comprador e resolvido automaticamente pelo codigo interno do TCE-CE."
     ),
     response_description="Indicadores analiticos, totais e metadados da consulta TCE-CE.",
