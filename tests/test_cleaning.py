@@ -12,22 +12,17 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
-os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
-os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
 os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
-os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
-os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
 from app import utils
 from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
-from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
-from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
+from app.pipeline.ingestion import fornecedores, ibge, tce
 
 
 def _fake_response(payload, status_code: int = 200) -> MagicMock:
@@ -36,227 +31,6 @@ def _fake_response(payload, status_code: int = 200) -> MagicMock:
     resposta.json.return_value = payload
     resposta.raise_for_status.return_value = None
     return resposta
-
-
-class LimparPncpContratacoesTest(unittest.TestCase):
-    """Usa app.pipeline.ingestion.pncp de verdade (só a chamada HTTP é mockada)."""
-
-    @patch("app.pipeline.ingestion.pncp.requests.get")
-    def test_pipeline_completo_a_partir_da_ingestao_real(self, mock_get) -> None:
-        registros_brutos = [
-            {
-                "numeroControlePNCP": "12345678000199-1-000001/2025",
-                "anoCompra": 2025,
-                "sequencialCompra": 1,
-                "objetoCompra": "  Aquisicao de material de escritorio  ",
-                "valorTotalEstimado": "15000,50",
-                "valorTotalHomologado": "14800,00",
-                "dataAberturaProposta": "2025-01-10T09:00:00",
-                "dataEncerramentoProposta": "2025-01-20T18:00:00",
-                "dataPublicacaoPncp": "2025-01-05",
-                "dataInclusao": "2025-01-05",
-                "dataAtualizacao": "2025-01-06",
-                "modalidadeNome": "Pregao Eletronico",
-                "situacaoCompraNome": "Divulgada no PNCP",
-                "orgaoEntidade": {
-                    # CNPJ com 14 digitos mas DV invalido (erro comum de digitacao) —
-                    # o pipeline deve manter a linha e so sinalizar em '_valido'.
-                    "cnpj": "12345678000199",
-                    "razaoSocial": "Prefeitura Municipal de São Gonçalo do Amarante",
-                },
-                "campoTotalmenteVazio": None,
-            },
-            # duplicata exata do primeiro registro (ex.: reconsulta da mesma pagina)
-            {
-                "numeroControlePNCP": "12345678000199-1-000001/2025",
-                "anoCompra": 2025,
-                "sequencialCompra": 1,
-                "objetoCompra": "  Aquisicao de material de escritorio  ",
-                "valorTotalEstimado": "15000,50",
-                "valorTotalHomologado": "14800,00",
-                "dataAberturaProposta": "2025-01-10T09:00:00",
-                "dataEncerramentoProposta": "2025-01-20T18:00:00",
-                "dataPublicacaoPncp": "2025-01-05",
-                "dataInclusao": "2025-01-05",
-                "dataAtualizacao": "2025-01-06",
-                "modalidadeNome": "Pregao Eletronico",
-                "situacaoCompraNome": "Divulgada no PNCP",
-                "orgaoEntidade": {
-                    "cnpj": "12345678000199",
-                    "razaoSocial": "Prefeitura Municipal de Amontada",
-                },
-                "campoTotalmenteVazio": None,
-            },
-            {
-                "numeroControlePNCP": "12345678000199-1-000002/2025",
-                "anoCompra": 2025,
-                "sequencialCompra": 2,
-                "objetoCompra": "Contratacao de servicos de limpeza",
-                "valorTotalEstimado": "8000,00",
-                "valorTotalHomologado": None,
-                "dataAberturaProposta": "2025-02-01T09:00:00",
-                "dataEncerramentoProposta": "2025-02-10T18:00:00",
-                "dataPublicacaoPncp": "2025-01-25",
-                # com offset de fuso (formato comum da API do PNCP) -> deve normalizar p/ UTC
-                "dataInclusao": "2025-01-25T08:00:00-03:00",
-                "dataAtualizacao": "2025-01-25",
-                "modalidadeNome": "Pregao Eletronico",
-                "situacaoCompraNome": "Divulgada no PNCP",
-                "orgaoEntidade": {
-                    "cnpj": "12345678000199",
-                    "razaoSocial": "Prefeitura Municipal de Amontada",
-                },
-                "campoTotalmenteVazio": None,
-            },
-            # sem numero de controle -> registro nao identificavel, deve ser descartado
-            {
-                "numeroControlePNCP": "",
-                "anoCompra": 2025,
-                "sequencialCompra": 3,
-                "objetoCompra": "Registro invalido sem numero de controle",
-                "valorTotalEstimado": "1000,00",
-                "campoTotalmenteVazio": None,
-            },
-        ]
-        mock_get.return_value = _fake_response({"data": registros_brutos})
-
-        registros = pncp.buscar_contratacoes_publicadas("2025-01-01", "2025-03-01")
-        self.assertEqual(len(registros), 4)  # ingestao real trouxe os 4 registros brutos
-
-        tabelas = pncp_cleaning.limpar_contratacoes(registros)
-        df = tabelas["contratacoes"]
-
-        self.assertEqual(len(df), 2)  # duplicata e registro sem chave removidos
-        self.assertNotIn("campo_totalmente_vazio", df.columns)  # coluna 100% vazia removida
-        self.assertIn("orgao_entidade_razao_social", df.columns)  # dict aninhado achatado
-
-        primeiro = df[df["numero_controle_pncp"] == "12345678000199-1-000001/2025"].iloc[0]
-        self.assertEqual(primeiro["objeto_compra"], "Aquisicao de material de escritorio")
-        self.assertEqual(primeiro["valor_total_estimado"], 15000.5)
-        self.assertEqual(primeiro["data_abertura_proposta"], "2025-01-10T09:00:00")
-        self.assertEqual(primeiro["data_publicacao_pncp"], "2025-01-05")
-        self.assertEqual(primeiro["orgao_entidade_cnpj"], "12345678000199")
-        self.assertFalse(primeiro["orgao_entidade_cnpj_valido"])  # DV invalido, mas linha nao foi descartada
-        # nome do orgao ganha uma chave normalizada (sem acento/maiusculo) p/ agregacao
-        self.assertEqual(
-            primeiro["orgao_entidade_razao_social_chave"],
-            "PREFEITURA MUNICIPAL DE SAO GONCALO DO AMARANTE",
-        )
-
-        segundo = df[df["numero_controle_pncp"] == "12345678000199-1-000002/2025"].iloc[0]
-        self.assertTrue(pd.isna(segundo["valor_total_homologado"]))  # nulo numerico preservado (nao virou 0)
-        # offset -03:00 normalizado para UTC em vez de descartado ao serializar
-        self.assertEqual(segundo["data_inclusao"], "2025-01-25T11:00:00Z")
-
-    def test_lista_de_itens_vira_tabela_filha_ligada_ao_registro_pai(self) -> None:
-        # Formato plausivel de uma contratacao com os itens ja embutidos
-        # (mesmos nomes de campo usados em pncp.consultar_itens_compra).
-        registro = {
-            "numeroControlePNCP": "12345678000199-1-000005/2025",
-            "anoCompra": 2025,
-            "sequencialCompra": 5,
-            "objetoCompra": "Aquisicao de material de expediente",
-            "valorTotalEstimado": "500,00",
-            "orgaoEntidade": {"cnpj": "12345678000199"},
-            "itens": [
-                {
-                    "numeroItem": 1,
-                    "descricao": "Caneta esferografica azul",
-                    "quantidade": "100",
-                    "valorUnitarioEstimado": "1,50",
-                    "valorTotal": "150,00",
-                    "unidadeMedida": "UN",
-                },
-                {
-                    "numeroItem": 2,
-                    "descricao": "Lapis grafite",
-                    "quantidade": "50",
-                    "valorUnitarioEstimado": "0,80",
-                    "valorTotal": "40,00",
-                    "unidadeMedida": "UN",
-                },
-            ],
-        }
-
-        tabelas = pncp_cleaning.limpar_contratacoes([registro])
-
-        self.assertNotIn("itens", tabelas["contratacoes"].columns)
-        self.assertIn("itens", tabelas)
-        itens = tabelas["itens"]
-        self.assertEqual(len(itens), 2)
-        self.assertTrue((itens["numero_controle_pncp"] == "12345678000199-1-000005/2025").all())
-        self.assertEqual(sorted(itens["valor_total"].tolist()), [40.0, 150.0])
-
-    def test_ni_fornecedor_com_zero_a_esquerda_nao_vira_numero(self) -> None:
-        # Achado de revisao de codigo: 'ni_fornecedor' (CNPJ/CPF do fornecedor
-        # vencedor) nao batia em _PADRAO_COLUNA_IDENTIFICADOR e virava Int64,
-        # destruindo o zero a esquerda e quebrando o enriquecimento por CNPJ.
-        registro = {
-            "numeroControlePNCP": "12345678000199-1-000009/2025",
-            "orgaoEntidade": {"cnpj": "12345678000199"},
-            "contratos": [
-                {
-                    "niFornecedor": "01234567000199",
-                    "nomeRazaoSocialFornecedor": "Fornecedor Exemplo",
-                    "valorGlobal": "100,00",
-                }
-            ],
-        }
-
-        tabelas = pncp_cleaning.limpar_contratacoes([registro])
-
-        self.assertEqual(tabelas["contratos"]["ni_fornecedor"].iloc[0], "01234567000199")
-
-
-class LimparPncpPcaTest(unittest.TestCase):
-    def test_limpa_planos_e_itens_pca_preservando_chaves_oficiais(self) -> None:
-        planos = pncp_cleaning.limpar_pca_planos(
-            [
-                {
-                    "numeroControlePNCP": "12345678000199-2026-000001",
-                    "cnpj": "12.345.678/0001-99",
-                    "anoPca": 2026,
-                    "sequencialPca": 1,
-                    "uf": "CE",
-                    "valorTotal": "1.000,50",
-                    "dataAtualizacao": "2026-09-09",
-                    "dataAtualizacaoGlobalPCA": "2026-09-09T10:15:30",
-                },
-                {
-                    "numeroControlePNCP": "12345678000199-2026-000001",
-                    "cnpj": "12.345.678/0001-99",
-                    "anoPca": 2026,
-                    "sequencialPca": 1,
-                    "uf": "CE",
-                    "valorTotal": "1.000,50",
-                    "dataAtualizacao": "2026-09-09",
-                    "dataAtualizacaoGlobalPCA": "2026-09-09T10:15:30",
-                },
-            ]
-        )
-        itens = pncp_cleaning.limpar_pca_itens(
-            [
-                {
-                    "numeroControlePNCP": "12345678000199-2026-000001",
-                    "cnpj": "12.345.678/0001-99",
-                    "anoPca": 2026,
-                    "sequencialPca": 1,
-                    "numeroItem": 7,
-                    "categoriaItemPcaNome": "Material de consumo",
-                    "valorTotal": "250,10",
-                }
-            ]
-        )
-
-        self.assertEqual(len(planos), 1)
-        self.assertEqual(planos.iloc[0]["cnpj"], "12345678000199")
-        self.assertEqual(planos.iloc[0]["valor_total"], 1000.5)
-        self.assertEqual(planos.iloc[0]["data_atualizacao"], "2026-09-09")
-        self.assertEqual(planos.iloc[0]["data_atualizacao_global_pca"], "2026-09-09T10:15:30")
-        self.assertEqual(len(itens), 1)
-        self.assertEqual(itens.iloc[0]["numero_item"], 7)
-        self.assertEqual(itens.iloc[0]["categoria_item_pca_nome"], "Material de consumo")
-        self.assertEqual(itens.iloc[0]["valor_total"], 250.1)
 
 
 class LimparTceTest(unittest.TestCase):
@@ -761,15 +535,15 @@ class ValidarMunicipioUfTest(unittest.TestCase):
 
         municipios = ibge_cleaning.limpar_municipios(ibge.listar_municipios("CE"))
 
-        # simula uma tabela de contratacoes ja limpa (PNCP), com o codigo IBGE do orgao
+        # Simula registros de outra fonte com codigo IBGE e UF informada.
         contratacoes = pd.DataFrame(
             [
                 # codigo bate com Abaiara/CE, UF informada tambem e CE -> confere
-                {"numero_controle_pncp": "A", "unidade_orgao_codigo_ibge": 2301000, "unidade_orgao_uf_sigla": "CE"},
+                {"id_registro": "A", "unidade_orgao_codigo_ibge": 2301000, "unidade_orgao_uf_sigla": "CE"},
                 # mesmo codigo (Abaiara/CE), mas UF informada errada -> nao confere
-                {"numero_controle_pncp": "B", "unidade_orgao_codigo_ibge": 2301000, "unidade_orgao_uf_sigla": "SP"},
+                {"id_registro": "B", "unidade_orgao_codigo_ibge": 2301000, "unidade_orgao_uf_sigla": "SP"},
                 # codigo que nao existe na base do IBGE -> nao verificavel (None, nao False)
-                {"numero_controle_pncp": "C", "unidade_orgao_codigo_ibge": 9999999, "unidade_orgao_uf_sigla": "CE"},
+                {"id_registro": "C", "unidade_orgao_codigo_ibge": 9999999, "unidade_orgao_uf_sigla": "CE"},
             ]
         )
 
@@ -781,7 +555,7 @@ class ValidarMunicipioUfTest(unittest.TestCase):
         )
 
         coluna = "unidade_orgao_codigo_ibge_uf_confere"
-        por_id = resultado.set_index("numero_controle_pncp")[coluna]
+        por_id = resultado.set_index("id_registro")[coluna]
         self.assertTrue(por_id["A"])
         self.assertFalse(por_id["B"])
         self.assertIsNone(por_id["C"])

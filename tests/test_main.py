@@ -13,19 +13,14 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
-os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
-os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
 os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
-os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
-os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 from fastapi import HTTPException
 
 from app import main
 from app.pipeline import analisys
-from app.pipeline.ingestion import pncp
 
 
 def _route_paths(routes) -> set[str]:
@@ -81,8 +76,8 @@ class MainTest(unittest.TestCase):
     def test_rotas_do_pipeline_estao_registradas(self) -> None:
         rotas = _route_paths(main.app.routes)
 
-        self.assertIn("/pipeline/pncp/contratacoes", rotas)
-        self.assertIn("/pipeline/pncp/ingestao-incremental", rotas)
+        self.assertNotIn("/pipeline/pncp/contratacoes", rotas)
+        self.assertNotIn("/pipeline/pncp/ingestao-incremental", rotas)
         self.assertIn("/pipeline/tce/contratos", rotas)
         self.assertNotIn("/pipeline/tce/kpis/me-por-mes", rotas)
         self.assertIn("/pipeline/tce/kpis/portes-por-mes", rotas)
@@ -171,26 +166,8 @@ class MainTest(unittest.TestCase):
         self.assertEqual(payload["kpi"], "indicadores_analiticos_principais")
         self.assertEqual(payload["indicadores"]["resumo_geral"][0]["valor_total"], 1000.0)
 
-    @patch("app.main.database.close_pool")
-    @patch("app.main.database.init_db")
-    @patch("app.main.analisys.consultar_pncp_contratacoes")
-    def test_endpoint_pncp_mapeia_fonte_indisponivel_para_503(
-        self,
-        consultar_pncp,
-        _init_db,
-        _close_pool,
-    ) -> None:
-        consultar_pncp.side_effect = pncp.PncpIndisponivelError("PNCP indisponivel")
-
-        with self.assertRaises(HTTPException) as contexto:
-            main.pncp_contratacoes(data_inicial="2025-01-01", data_final="2025-01-31")
-
-        self.assertEqual(contexto.exception.status_code, 503)
-        self.assertEqual(contexto.exception.detail, "PNCP indisponivel")
-
     def test_endpoints_rejeitam_data_compacta(self) -> None:
         for endpoint in (
-            main.pncp_contratacoes,
             main.tce_contratos,
             main.tce_kpi_portes_por_mes,
             main.tce_analitico_indicadores,
@@ -220,22 +197,6 @@ class MainTest(unittest.TestCase):
         self.assertEqual(contexto.exception.status_code, 503)
         self.assertEqual(contexto.exception.detail, "Nenhuma competência disponível.")
 
-    @patch("app.api.endpoints.pipeline.pncp_incremental.executar_ingestao_incremental_pncp")
-    def test_endpoint_pncp_ingestao_incremental_retorna_resumo(self, executar_ingestao) -> None:
-        executar_ingestao.return_value = {
-            "fonte": "PNCP",
-            "status_execucao": "sucesso",
-            "quantidade_lida": 2,
-            "quantidade_inserida": 1,
-            "quantidade_atualizada": 1,
-            "quantidade_com_erro": 0,
-        }
-
-        resposta = main.pncp_ingestao_incremental(max_paginas=1)
-
-        executar_ingestao.assert_called_once_with(max_paginas=1)
-        self.assertEqual(resposta["status_execucao"], "sucesso")
-        self.assertEqual(resposta["quantidade_lida"], 2)
 
 
 if __name__ == "__main__":

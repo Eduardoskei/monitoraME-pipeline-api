@@ -14,13 +14,9 @@ os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:
 os.environ.setdefault("LOG_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test")
 os.environ.setdefault("TCE_CE_BASE_URL", "https://api-dados-abertos.tce.ce.gov.br/sim")
 os.environ.setdefault("IBGE_LOCALIDADES_BASE_URL", "https://servicodados.ibge.gov.br/api/v1/localidades")
-os.environ.setdefault("PNCP_CONSULTA_BASE_URL", "https://pncp.gov.br/api/consulta")
-os.environ.setdefault("PNCP_GESTAO_BASE_URL", "https://pncp.gov.br/api/pncp")
 os.environ.setdefault("OPENCNPJ_BASE_URL", "https://api.opencnpj.org")
 os.environ.setdefault("UF_PADRAO", "CE")
-os.environ.setdefault("CODIGO_IBGE_PADRAO", "2304400")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
-os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 from app.core import log_models, models, orm
 
@@ -34,37 +30,12 @@ class OrmMetadataTest(unittest.TestCase):
         esperado = {
             "ibge_municipios",
             "fornecedores_me",
-            "pncp_ingestion_state",
-            "pncp_ingestion_runs",
-            "pncp_contratacoes",
-            "pncp_itens",
-            "pncp_resultados",
-            "pncp_contratos",
-            "pncp_pca_planos",
-            "pncp_pca_itens",
-            "pncp_fornecedores",
             "tce_despesa_ingestion_runs",
             "tce_empenhos",
             "tce_anulacoes_empenhos",
         }
 
         self.assertEqual(set(orm.MainBase.metadata.tables), esperado)
-
-    def test_modelo_contratacao_tem_jsonb_datas_e_relacionamentos(self) -> None:
-        tabela = models.PncpContratacao.__table__
-
-        self.assertIsInstance(tabela.c.payload.type, JSONB)
-        self.assertFalse(tabela.c.payload.nullable)
-        self.assertTrue(tabela.c.data_publicacao_pncp.type.timezone)
-        self.assertIn("itens", models.PncpContratacao.__mapper__.relationships)
-        self.assertIn("resultados", models.PncpContratacao.__mapper__.relationships)
-        self.assertIn("contratos", models.PncpContratacao.__mapper__.relationships)
-
-    def test_modelo_item_tem_fk_com_delete_cascade(self) -> None:
-        fk = next(iter(models.PncpItem.__table__.foreign_keys))
-
-        self.assertEqual(fk.column.table.name, "pncp_contratacoes")
-        self.assertEqual(fk.ondelete, "CASCADE")
 
     def test_modelos_tce_preservam_versoes_e_valores_em_centavos(self) -> None:
         run = models.TceDespesaIngestionRun.__table__

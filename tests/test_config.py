@@ -15,13 +15,9 @@ REQUIRED_ENV = {
     "LOG_DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test",
     "TCE_CE_BASE_URL": "https://api-dados-abertos.tce.ce.gov.br/sim/",
     "IBGE_LOCALIDADES_BASE_URL": "https://servicodados.ibge.gov.br/api/v1/localidades",
-    "PNCP_CONSULTA_BASE_URL": "https://pncp.gov.br/api/consulta",
-    "PNCP_GESTAO_BASE_URL": "https://pncp.gov.br/api/pncp",
     "OPENCNPJ_BASE_URL": "https://api.opencnpj.org",
     "UF_PADRAO": "CE",
-    "CODIGO_IBGE_PADRAO": "2304400",
     "CODIGO_MUNICIPIO_TCE_PADRAO": "010",
-    "MODALIDADE_ID_PADRAO": "6",
 }
 
 
@@ -71,29 +67,12 @@ class ConfigTest(unittest.TestCase):
             "postgresql://postgres:postgres@localhost:5432/monitorame_logs_test",
         )
         self.assertEqual(config.TCE_CE_BASE_URL, "https://api-dados-abertos.tce.ce.gov.br/sim")
-        self.assertEqual(config.MODALIDADE_ID_PADRAO, 6)
-        self.assertEqual(config.PNCP_MODALIDADES_INCREMENTAIS, (6,))
-        self.assertEqual(config.PNCP_UFS_INCREMENTAIS, ("CE",))
-        self.assertEqual(config.PNCP_JANELA_INICIAL_HORAS, 6)
         self.assertEqual(len(config.NATUREZAS_DESPESA_CONSIDERADAS), 7)
         self.assertEqual(
             config.CODIGOS_NATUREZAS_DESPESA_CONSIDERADAS,
             ("39", "51", "30", "52", "32", "35", "40"),
         )
 
-    def test_variaveis_incrementais_pncp_sao_configuraveis(self) -> None:
-        env = {
-            **REQUIRED_ENV,
-            "PNCP_MODALIDADES_INCREMENTAIS": "6, 8, 6",
-            "PNCP_UFS_INCREMENTAIS": "ce, pe",
-            "PNCP_JANELA_INICIAL_HORAS": "24",
-        }
-
-        config = self._reload_config_with_env(env)
-
-        self.assertEqual(config.PNCP_MODALIDADES_INCREMENTAIS, (6, 8))
-        self.assertEqual(config.PNCP_UFS_INCREMENTAIS, ("CE", "PE"))
-        self.assertEqual(config.PNCP_JANELA_INICIAL_HORAS, 24)
 
 
 if __name__ == "__main__":

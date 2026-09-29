@@ -1,37 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import json
 from typing import Any
 
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
 
 from app.core import orm
 from app.core.models import (
     FornecedorMe,
     IbgeMunicipio,
-    PncpIngestionRun,
-    PncpIngestionState,
 )
 from app.utils import primeiro_valor as _primeiro_valor
 
 
 _schema_initialized = False
-
-
-def _jsonb(valor: dict[str, Any] | None) -> str:
-    return json.dumps(valor or {}, ensure_ascii=False, default=str)
-
-
-def _json_payload(valor: dict[str, Any] | None) -> dict[str, Any]:
-    return json.loads(_jsonb(valor))
-
-
-def _datetime_utc(valor: datetime) -> datetime:
-    if valor.tzinfo is None:
-        return valor.replace(tzinfo=timezone.utc)
-    return valor.astimezone(timezone.utc)
 
 
 def _extrair_uf_municipio(municipio: dict[str, Any]) -> str | None:
@@ -192,161 +173,13 @@ def localizar_fornecedor_me(cnpj: str) -> dict[str, Any] | None:
         return _fornecedor_me_to_dict(session.get(FornecedorMe, cnpj))
 
 
-def buscar_checkpoint_pncp(escopo: str) -> datetime | None:
-    init_db()
-    with orm.main_session() as session:
-        estado = session.get(PncpIngestionState, escopo)
-        return estado.ultima_execucao_sucesso if estado is not None else None
-
-
-def salvar_checkpoint_pncp(
-    *,
-    escopo: str,
-    ultima_execucao_sucesso: datetime,
-    parametros: dict[str, Any] | None = None,
-) -> None:
-    init_db()
-    with orm.main_session() as session:
-        _execute_salvar_checkpoint_pncp(
-            session,
-            escopo=escopo,
-            ultima_execucao_sucesso=ultima_execucao_sucesso,
-            parametros=parametros,
-        )
-
-
-def _execute_salvar_checkpoint_pncp(
-    session: Session,
-    *,
-    escopo: str,
-    ultima_execucao_sucesso: datetime,
-    parametros: dict[str, Any] | None = None,
-) -> None:
-    session.merge(
-        PncpIngestionState(
-            escopo=escopo,
-            ultima_execucao_sucesso=_datetime_utc(ultima_execucao_sucesso),
-            parametros=_json_payload(parametros),
-            atualizado_em=datetime.now(timezone.utc),
-        )
-    )
-
-
-def registrar_execucao_pncp(
-    *,
-    escopo: str,
-    status_execucao: str,
-    executado_em: datetime,
-    janela_inicio: datetime,
-    janela_fim: datetime,
-    quantidade_lida: int,
-    quantidade_inserida: int,
-    quantidade_atualizada: int,
-    quantidade_com_erro: int,
-    parametros: dict[str, Any] | None = None,
-    totais: dict[str, Any] | None = None,
-    erro: str | None = None,
-) -> None:
-    init_db()
-    with orm.main_session() as session:
-        _execute_registrar_execucao_pncp(
-            session,
-            escopo=escopo,
-            status_execucao=status_execucao,
-            executado_em=executado_em,
-            janela_inicio=janela_inicio,
-            janela_fim=janela_fim,
-            quantidade_lida=quantidade_lida,
-            quantidade_inserida=quantidade_inserida,
-            quantidade_atualizada=quantidade_atualizada,
-            quantidade_com_erro=quantidade_com_erro,
-            parametros=parametros,
-            totais=totais,
-            erro=erro,
-        )
-
-
-def _execute_registrar_execucao_pncp(
-    session: Session,
-    *,
-    escopo: str,
-    status_execucao: str,
-    executado_em: datetime,
-    janela_inicio: datetime,
-    janela_fim: datetime,
-    quantidade_lida: int,
-    quantidade_inserida: int,
-    quantidade_atualizada: int,
-    quantidade_com_erro: int,
-    parametros: dict[str, Any] | None = None,
-    totais: dict[str, Any] | None = None,
-    erro: str | None = None,
-) -> None:
-    session.add(
-        PncpIngestionRun(
-            escopo=escopo,
-            status_execucao=status_execucao,
-            executado_em=_datetime_utc(executado_em),
-            janela_inicio=_datetime_utc(janela_inicio),
-            janela_fim=_datetime_utc(janela_fim),
-            quantidade_lida=max(0, int(quantidade_lida)),
-            quantidade_inserida=max(0, int(quantidade_inserida)),
-            quantidade_atualizada=max(0, int(quantidade_atualizada)),
-            quantidade_com_erro=max(0, int(quantidade_com_erro)),
-            parametros=_json_payload(parametros),
-            totais=_json_payload(totais),
-            erro=erro,
-        )
-    )
-
-
-def registrar_sucesso_e_checkpoint_pncp(
-    *,
-    escopo: str,
-    executado_em: datetime,
-    janela_inicio: datetime,
-    janela_fim: datetime,
-    quantidade_lida: int,
-    quantidade_inserida: int,
-    quantidade_atualizada: int,
-    parametros: dict[str, Any] | None = None,
-    totais: dict[str, Any] | None = None,
-) -> None:
-    init_db()
-    with orm.main_session() as session:
-        _execute_registrar_execucao_pncp(
-            session,
-            escopo=escopo,
-            status_execucao="sucesso",
-            executado_em=executado_em,
-            janela_inicio=janela_inicio,
-            janela_fim=janela_fim,
-            quantidade_lida=quantidade_lida,
-            quantidade_inserida=quantidade_inserida,
-            quantidade_atualizada=quantidade_atualizada,
-            quantidade_com_erro=0,
-            parametros=parametros,
-            totais=totais,
-        )
-        _execute_salvar_checkpoint_pncp(
-            session,
-            escopo=escopo,
-            ultima_execucao_sucesso=janela_fim,
-            parametros=parametros,
-        )
-
-
 __all__ = [
-    "buscar_checkpoint_pncp",
     "close_pool",
     "init_db",
     "listar_municipios_ibge",
     "localizar_fornecedor_me",
     "localizar_municipio_ibge",
     "localizar_municipio_por_nome_ibge",
-    "registrar_execucao_pncp",
-    "registrar_sucesso_e_checkpoint_pncp",
-    "salvar_checkpoint_pncp",
     "salvar_fornecedor_me",
     "salvar_municipio_ibge",
     "salvar_municipios_ibge",
