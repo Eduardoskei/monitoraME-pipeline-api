@@ -8,7 +8,6 @@ from app.api.endpoints.pipeline import (
     pncp_contratacoes,
     tce_analitico_indicadores,
     tce_contratos,
-    tce_kpi_me_por_mes,
     tce_kpi_portes_por_mes,
 )
 from app.api.router import router
@@ -23,7 +22,6 @@ __all__ = [
     "pncp_contratacoes",
     "tce_analitico_indicadores",
     "tce_contratos",
-    "tce_kpi_me_por_mes",
     "tce_kpi_portes_por_mes",
 ]
 

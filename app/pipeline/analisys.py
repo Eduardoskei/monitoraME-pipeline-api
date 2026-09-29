@@ -1,13 +1,20 @@
+from datetime import date
 from typing import Any
 import pandas as pd
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, MODALIDADE_ID_PADRAO, UF_PADRAO
 from app.pipeline import analitico, kpis, merge, pncp_incremental
+from app.pipeline import tce_despesas as tce_despesas_pipeline
 from app.pipeline.cleaners import ibge as ibge_cleaning
 from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import pncp as pncp_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
-from app.pipeline.enrichment.fornecedores import extrair_cnpjs_distintos
+from app.pipeline.enrichment.fornecedores import enriquecer_com_fornecedor, extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, ibge, pncp, tce
+from app.pipeline.persistence import tce_despesas as tce_despesas_persistence
+
+
+class CompetenciasTceIndisponiveisError(RuntimeError):
+    """Nenhuma competência solicitada pôde ser atualizada antes do cálculo."""
 
 
 def valor_json(valor: Any) -> Any:
@@ -135,6 +142,66 @@ def _coletar_fornecedores(cnpjs: list[str], throttle_segundos: float) -> pd.Data
 
     registros = fornecedores.coletar_fornecedores_em_lote(cnpjs, throttle_segundos=throttle_segundos)
     return opencnpj_cleaning.limpar_fornecedores(registros)
+
+
+def _competencias_entre_datas(data_inicial: str, data_final: str) -> list[str]:
+    try:
+        inicio = date.fromisoformat(data_inicial)
+        fim = date.fromisoformat(data_final)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Datas devem usar o formato YYYY-MM-DD.") from error
+    if inicio > fim:
+        raise ValueError("data_inicial deve ser menor ou igual a data_final.")
+
+    competencias: list[str] = []
+    ano, mes = inicio.year, inicio.month
+    while (ano, mes) <= (fim.year, fim.month):
+        competencias.append(f"{ano:04d}-{mes:02d}")
+        if mes == 12:
+            ano, mes = ano + 1, 1
+        else:
+            mes += 1
+    return competencias
+
+
+def _atualizar_competencias_tce(
+    *,
+    competencias: list[str],
+    codigo_municipio: str,
+) -> tuple[list[str], list[dict[str, str]]]:
+    publicadas: list[str] = []
+    falhas: list[dict[str, str]] = []
+    for competencia in competencias:
+        try:
+            resultado = tce_despesas_pipeline.executar_ingestao_competencia_tce(
+                competencia,
+                codigo_municipio_tce=codigo_municipio,
+            )
+        except Exception as error:
+            falhas.append({"competencia": competencia, "erro": str(error)})
+            continue
+
+        if resultado.status == tce_despesas_persistence.STATUS_PUBLICADO:
+            publicadas.append(competencia)
+            continue
+
+        codigos = ", ".join(
+            str(problema.get("codigo", "ERRO_VALIDACAO"))
+            for problema in resultado.problemas
+        )
+        falhas.append(
+            {
+                "competencia": competencia,
+                "erro": codigos or f"Lote finalizado com status {resultado.status}.",
+            }
+        )
+
+    if not publicadas:
+        meses = ", ".join(competencias)
+        raise CompetenciasTceIndisponiveisError(
+            f"Nenhuma competência do TCE-CE pôde ser atualizada: {meses}."
+        )
+    return publicadas, falhas
 
 
 def montar_base_pncp(
@@ -279,14 +346,36 @@ def montar_base_analitica_tce(
     municipio_comprador: str | None = None,
     throttle_fornecedores: float = 0.3,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    municipio_comprador = municipio_comprador or _resolver_nome_municipio_tce(codigo_municipio)
-    base, metadados = montar_base_tce_contratos(
-        data_inicial,
-        data_final,
+    competencias = _competencias_entre_datas(data_inicial, data_final)
+    competencias_publicadas, falhas_competencias = _atualizar_competencias_tce(
+        competencias=competencias,
         codigo_municipio=codigo_municipio,
-        enriquecer_fornecedores=True,
-        throttle_fornecedores=throttle_fornecedores,
     )
+    empenhos = tce_despesas_persistence.listar_empenhos_liquidos_publicados(
+        codigo_municipio_tce=codigo_municipio,
+        data_inicial=date.fromisoformat(data_inicial),
+        data_final=date.fromisoformat(data_final),
+    )
+    competencias_validas = set(competencias_publicadas)
+    empenhos = [
+        empenho
+        for empenho in empenhos
+        if str(empenho.get("data_empenho", ""))[:7] in competencias_validas
+    ]
+
+    municipio_comprador = municipio_comprador or _resolver_nome_municipio_tce(codigo_municipio)
+    base = pd.DataFrame(empenhos)
+    fornecedores_df = None
+    if not base.empty:
+        cnpjs = extrair_cnpjs_distintos(base.get("cnpj_fornecedor"))
+        fornecedores_df = _coletar_fornecedores(cnpjs, throttle_fornecedores)
+        if fornecedores_df is not None:
+            base = enriquecer_com_fornecedor(
+                base,
+                fornecedores_df,
+                coluna_cnpj="cnpj_fornecedor",
+            )
+
     base_analitica = analitico.montar_base_analitica_tce(
         base,
         codigo_municipio=codigo_municipio,
@@ -294,24 +383,25 @@ def montar_base_analitica_tce(
         uf_comprador=UF_PADRAO,
     )
     metadados = {
-        **metadados,
+        "fonte": "TCE-CE",
+        "parametros": {
+            "data_inicial": data_inicial,
+            "data_final": data_final,
+            "codigo_municipio": codigo_municipio,
+        },
+        "competencias_solicitadas": competencias,
+        "competencias_publicadas": competencias_publicadas,
+        "competencias_ausentes": [falha["competencia"] for falha in falhas_competencias],
+        "falhas_competencias": falhas_competencias,
+        "totais_brutos": {"empenhos": len(empenhos)},
         "base_analitica": {
-            "nome": "tce_contratos",
+            "nome": "tce_empenhos_liquidos",
+            "base_calculo": analitico.BASE_CALCULO_EMPENHOS_TCE,
             "municipio_comprador": municipio_comprador,
             "colunas": list(analitico.COLUNAS_BASE_ANALITICA_TCE),
         },
     }
     return base_analitica, metadados
-
-
-def consultar_tce_base_analitica(*, limite: int | None = 100, **kwargs: Any) -> dict[str, Any]:
-    base, metadados = montar_base_analitica_tce(**kwargs)
-    return {
-        **metadados,
-        "limite_resposta": limite,
-        "totais": {"registros": int(len(base))},
-        "dados": dataframe_para_registros(base, limite=limite),
-    }
 
 
 def montar_indicadores_analiticos_tce(
@@ -363,35 +453,6 @@ def consultar_tce_indicadores_analiticos(
     }
 
 
-def consultar_kpi_tce_me_por_mes(
-    data_inicial: str,
-    data_final: str,
-    *,
-    codigo_municipio: str = CODIGO_MUNICIPIO_TCE_PADRAO,
-    throttle_fornecedores: float = 0.3,
-    limite: int | None = 100,
-) -> dict[str, Any]:
-    base, metadados = montar_base_tce_contratos(
-        data_inicial,
-        data_final,
-        codigo_municipio=codigo_municipio,
-        enriquecer_fornecedores=True,
-        throttle_fornecedores=throttle_fornecedores,
-    )
-    resultado = kpis.calcular_participacao_me_por_mes(
-        base,
-        coluna_data="data_contrato",
-        coluna_valor="valor_total_contrato",
-    )
-    return {
-        **metadados,
-        "limite_resposta": limite,
-        "totais": {"contratos": int(len(base)), "periodos": int(len(resultado))},
-        "kpi": "participacao_me_por_mes",
-        "dados": dataframe_para_registros(resultado, limite=limite),
-    }
-
-
 def consultar_kpi_tce_portes_por_mes(
     data_inicial: str,
     data_final: str,
@@ -400,23 +461,23 @@ def consultar_kpi_tce_portes_por_mes(
     throttle_fornecedores: float = 0.3,
     limite: int | None = 100,
 ) -> dict[str, Any]:
-    base, metadados = montar_base_tce_contratos(
+    base, metadados = montar_base_analitica_tce(
         data_inicial,
         data_final,
         codigo_municipio=codigo_municipio,
-        enriquecer_fornecedores=True,
         throttle_fornecedores=throttle_fornecedores,
     )
     resultado = kpis.calcular_participacao_por_porte_por_mes(
         base,
-        coluna_data="data_contrato",
-        coluna_valor="valor_total_contrato",
+        coluna_data="data_referencia",
+        coluna_valor="valor",
+        coluna_porte="porte_fornecedor",
     )
     return {
         **metadados,
         "limite_resposta": limite,
         "totais": {
-            "contratos": int(len(base)),
+            "empenhos": int(len(base)),
             "registros_kpi": int(len(resultado)),
         },
         "kpi": "participacao_por_porte_por_mes",

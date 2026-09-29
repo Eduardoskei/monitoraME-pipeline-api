@@ -239,6 +239,10 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     )
     if coluna_mei:
         df["optante_mei"] = df[coluna_mei].map(normalizar_booleano).astype("boolean")
+        mei_confirmado = df["optante_mei"].fillna(False)
+        df.loc[mei_confirmado, "porte_padronizado"] = "MEI"
+        elegivel = df["porte_padronizado"].eq("ME").astype("boolean")
+        df["elegivel_me"] = elegivel.mask(df["porte_padronizado"].isna(), pd.NA)
 
     coluna_data_opcao_mei = next(
         (

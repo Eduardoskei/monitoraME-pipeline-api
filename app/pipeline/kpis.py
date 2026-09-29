@@ -4,14 +4,9 @@ app/pipeline/kpis.py
 Camada de agregacao (KPIs) sobre tabelas ja limpas/enriquecidas por
 cleaners/ e merge.py — nao faz join nem limpeza, so agrupa e soma.
 
-Uso tipico:
-    df = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)
-    df["ano_mes"] = kpis.extrair_ano_mes(df["data_contrato"])
-    resultado = kpis.calcular_participacao_me(
-        df,
-        colunas_agrupamento=["ano_mes"],
-        coluna_valor="valor_total_contrato",
-    )
+Os KPIs analíticos do TCE recebem a base canônica de empenhos líquidos criada
+por ``app.pipeline.analitico``. Esta camada apenas agrupa e soma os campos
+canônicos; coleta, anulações e enriquecimento são resolvidos antes dela.
 """
 
 from __future__ import annotations
@@ -381,62 +376,6 @@ def extrair_ano_mes(coluna_data: pd.Series) -> pd.Series:
     return ano_mes.where(valido, None)
 
 
-def calcular_participacao_me(
-    df: pd.DataFrame,
-    *,
-    colunas_agrupamento: list[str],
-    coluna_valor: str,
-    coluna_elegivel_me: str = "fornecedor_elegivel_me",
-) -> pd.DataFrame:
-    """
-    Agrupa por `colunas_agrupamento` e calcula, por grupo:
-      - total_compras: soma de `coluna_valor` de todas as linhas do grupo
-      - valor_me: soma de `coluna_valor` so onde `coluna_elegivel_me` e True
-      - percentual_me: valor_me / total_compras (None quando o total e 0,
-        para nao gerar divisao por zero nem confundir com "0% de participacao")
-
-    Linhas sem fornecedor identificado (`coluna_elegivel_me` nulo — CNPJ nao
-    encontrado na base de fornecedores, nao consultado, ou contratado pessoa
-    fisica) contam para o total mas NAO para valor_me: sao "nao
-    comprovadamente ME", o que e diferente de "comprovadamente nao ME"
-    (`False`). EPP e MEI tambem nao contam neste KPI.
-    """
-    df = df.copy()
-    eh_me = df[coluna_elegivel_me].map(lambda v: bool(v) if pd.notna(v) else False)
-    df["_valor_me"] = df[coluna_valor].where(eh_me, 0)
-
-    agrupado = (
-        df.groupby(colunas_agrupamento, dropna=False)
-        .agg(total_compras=(coluna_valor, "sum"), valor_me=("_valor_me", "sum"))
-        .reset_index()
-    )
-
-    agrupado["percentual_me"] = (agrupado["valor_me"] / agrupado["total_compras"]).where(
-        agrupado["total_compras"] != 0
-    )
-
-    return agrupado
-
-
-def calcular_participacao_me_por_mes(
-    df: pd.DataFrame,
-    *,
-    coluna_data: str,
-    coluna_valor: str,
-    coluna_elegivel_me: str = "fornecedor_elegivel_me",
-) -> pd.DataFrame:
-    """Atalho de `calcular_participacao_me` agrupando por mes (`extrair_ano_mes`)."""
-    df = df.copy()
-    df["ano_mes"] = extrair_ano_mes(df[coluna_data])
-
-    return calcular_participacao_me(
-        df,
-        colunas_agrupamento=["ano_mes"],
-        coluna_valor=coluna_valor,
-        coluna_elegivel_me=coluna_elegivel_me,
-    )
-
-
 def calcular_participacao_por_porte(
     df: pd.DataFrame,
     *,
@@ -448,11 +387,11 @@ def calcular_participacao_por_porte(
     colunas_resultado = [
         *colunas_agrupamento,
         "porte",
-        "total_contratos",
-        "quantidade_contratos",
+        "total_empenhos",
+        "quantidade_empenhos",
         "total_compras",
         "valor_porte",
-        "percentual_contratos",
+        "percentual_empenhos",
         "percentual_valor",
     ]
 
@@ -487,7 +426,7 @@ def calcular_participacao_por_porte(
     totais = (
         base.groupby(colunas_agrupamento, dropna=False)
         .agg(
-            total_contratos=(coluna_valor, "size"),
+            total_empenhos=(coluna_valor, "size"),
             total_compras=(coluna_valor, "sum"),
         )
         .reset_index()
@@ -499,7 +438,7 @@ def calcular_participacao_por_porte(
             dropna=False,
         )
         .agg(
-            quantidade_contratos=(coluna_valor, "size"),
+            quantidade_empenhos=(coluna_valor, "size"),
             valor_porte=(coluna_valor, "sum"),
         )
         .reset_index()
@@ -528,17 +467,17 @@ def calcular_participacao_por_porte(
         how="left",
     )
 
-    resultado["quantidade_contratos"] = (
-        resultado["quantidade_contratos"]
+    resultado["quantidade_empenhos"] = (
+        resultado["quantidade_empenhos"]
         .fillna(0)
         .astype(int)
     )
     resultado["valor_porte"] = resultado["valor_porte"].fillna(0)
 
-    resultado["percentual_contratos"] = (
-        resultado["quantidade_contratos"]
-        / resultado["total_contratos"]
-    ).where(resultado["total_contratos"] != 0)
+    resultado["percentual_empenhos"] = (
+        resultado["quantidade_empenhos"]
+        / resultado["total_empenhos"]
+    ).where(resultado["total_empenhos"] != 0)
 
     resultado["percentual_valor"] = (
         resultado["valor_porte"]
@@ -561,11 +500,11 @@ def calcular_participacao_por_porte_por_mes(
             columns=[
                 "ano_mes",
                 "porte",
-                "total_contratos",
-                "quantidade_contratos",
+                "total_empenhos",
+                "quantidade_empenhos",
                 "total_compras",
                 "valor_porte",
-                "percentual_contratos",
+                "percentual_empenhos",
                 "percentual_valor",
             ]
         )

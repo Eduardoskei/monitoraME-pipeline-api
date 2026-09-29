@@ -11,7 +11,7 @@ from app.pipeline.naturezas_despesa import (
 from app.utils import normalizar_cnpj, valor_preenchido
 
 
-BASE_CALCULO_CONTRATOS_TCE = "contratos_tce"
+BASE_CALCULO_EMPENHOS_TCE = "empenhos_tce"
 ORIGEM_NAO_IDENTIFICADA = "Nao identificada"
 PORTE_NAO_IDENTIFICADO = "NAO_IDENTIFICADO"
 
@@ -20,12 +20,15 @@ COLUNAS_BASE_ANALITICA_TCE = (
     "base_calculo",
     "codigo_municipio_tce",
     "municipio_comprador",
-    "numero_contrato",
+    "chave_empenho",
+    "numero_empenho",
     "data_referencia",
     "ano",
     "ano_mes",
     "natureza_despesa_codigo",
     "natureza_despesa",
+    "valor_empenhado",
+    "valor_anulado",
     "valor",
     "cnpj_fornecedor",
     "nome_fornecedor",
@@ -149,10 +152,8 @@ def montar_base_analitica_tce(
 ) -> pd.DataFrame:
     """Monta a base canonica usada pelos indicadores analiticos do TCE.
 
-    A entrada esperada e a base ja limpa/enriquecida por
-    ``analisys.montar_base_tce_contratos``. Enquanto a fonte de empenhos nao
-    estiver definida, ``base_calculo`` deixa explicito que o grao atual vem de
-    contratos do TCE.
+    A entrada esperada contém os empenhos publicados, já líquidos das
+    anulações publicadas e enriquecidos pela OpenCNPJ.
     """
     if base_tce is None or base_tce.empty:
         return pd.DataFrame(columns=COLUNAS_BASE_ANALITICA_TCE)
@@ -161,10 +162,10 @@ def montar_base_analitica_tce(
     resultado = pd.DataFrame(index=base.index)
 
     resultado["fonte"] = "TCE-CE"
-    resultado["base_calculo"] = BASE_CALCULO_CONTRATOS_TCE
+    resultado["base_calculo"] = BASE_CALCULO_EMPENHOS_TCE
     resultado["codigo_municipio_tce"] = _primeira_coluna(
         base,
-        ("codigo_municipio",),
+        ("codigo_municipio_tce", "codigo_municipio"),
         padrao=codigo_municipio,
     )
     if codigo_municipio is not None:
@@ -178,8 +179,9 @@ def montar_base_analitica_tce(
     if municipio_comprador is not None:
         resultado["municipio_comprador"] = resultado["municipio_comprador"].fillna(municipio_comprador)
 
-    resultado["numero_contrato"] = _serie_ou_padrao(base, "numero_contrato")
-    resultado["data_referencia"] = _primeira_coluna(base, ("data_contrato", "data_referencia"))
+    resultado["chave_empenho"] = _serie_ou_padrao(base, "chave_empenho")
+    resultado["numero_empenho"] = _serie_ou_padrao(base, "numero_empenho")
+    resultado["data_referencia"] = _primeira_coluna(base, ("data_empenho", "data_referencia"))
     resultado["ano"] = _ano(resultado["data_referencia"])
     resultado["ano_mes"] = _ano_mes(resultado["data_referencia"])
 
@@ -187,19 +189,27 @@ def montar_base_analitica_tce(
     resultado["natureza_despesa_codigo"] = codigos_natureza
     resultado["natureza_despesa"] = _natureza_descricao(base, codigos_natureza)
 
-    resultado["valor"] = pd.to_numeric(
-        _primeira_coluna(base, ("valor_total_contrato", "valor", "valor_empenhado")),
+    resultado["valor_empenhado"] = pd.to_numeric(
+        _serie_ou_padrao(base, "valor_empenhado_centavos"),
         errors="coerce",
-    )
+    ) / 100
+    resultado["valor_anulado"] = pd.to_numeric(
+        _serie_ou_padrao(base, "valor_anulado_centavos", 0),
+        errors="coerce",
+    ) / 100
+    resultado["valor"] = pd.to_numeric(
+        _serie_ou_padrao(base, "valor_liquido_centavos"),
+        errors="coerce",
+    ) / 100
 
     documento_fornecedor = _primeira_coluna(
         base,
-        ("numero_documento_negociante", "cnpj_fornecedor", "ni_fornecedor"),
+        ("cnpj_fornecedor", "documento_fornecedor"),
     )
     resultado["cnpj_fornecedor"] = documento_fornecedor.map(_normalizar_cnpj_fornecedor)
     resultado["nome_fornecedor"] = _primeira_coluna(
         base,
-        ("nome_negociante", "nome_fornecedor", "nome_razao_social_fornecedor"),
+        ("nome_fornecedor", "nome_razao_social_fornecedor"),
     )
 
     porte = _primeira_coluna(base, ("fornecedor_porte_padronizado", "porte_fornecedor"))
@@ -238,7 +248,7 @@ def montar_base_analitica_tce(
 
 
 __all__ = [
-    "BASE_CALCULO_CONTRATOS_TCE",
+    "BASE_CALCULO_EMPENHOS_TCE",
     "COLUNAS_BASE_ANALITICA_TCE",
     "ORIGEM_NAO_IDENTIFICADA",
     "PORTE_NAO_IDENTIFICADO",

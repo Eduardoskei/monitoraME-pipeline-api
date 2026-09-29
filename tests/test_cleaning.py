@@ -608,6 +608,22 @@ class LimparFornecedoresTest(unittest.TestCase):
         self.assertTrue(por_cnpj.loc["98765432000111", "optante_simples_nacional"])
         self.assertTrue(pd.isna(por_cnpj.loc["98765432000111", "optante_mei"]))
 
+    def test_opcao_mei_da_opencnpj_separa_mei_de_me(self) -> None:
+        df = opencnpj_cleaning.limpar_fornecedores(
+            [
+                {
+                    "cnpj": "11444777000161",
+                    "opencnpj": {
+                        "porte_empresa": "MICRO EMPRESA",
+                        "simples_mei": {"opcao_mei": "S"},
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(df.iloc[0]["porte_padronizado"], "MEI")
+        self.assertFalse(df.iloc[0]["elegivel_me"])
+
     def test_sem_porte_mantem_elegibilidade_nula_para_kpi(self) -> None:
         df = opencnpj_cleaning.limpar_fornecedores(
             [

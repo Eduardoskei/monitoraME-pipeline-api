@@ -64,6 +64,26 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_tce_encadeia_schema_versionado(self) -> None:
+        migration = (
+            ROOT
+            / "alembic"
+            / "main"
+            / "versions"
+            / "0002_tce_despesas_versionadas.py"
+        )
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.revision, "0002_tce_despesas")
+        self.assertEqual(modulo.down_revision, "0001_initial_main")
+        self.assertIn("tce_despesa_ingestion_runs", texto)
+        self.assertIn("tce_empenhos", texto)
+        self.assertIn("tce_anulacoes_empenhos", texto)
+        self.assertIn("status = 'PUBLICADO'", texto)
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
 
 if __name__ == "__main__":
     unittest.main()
