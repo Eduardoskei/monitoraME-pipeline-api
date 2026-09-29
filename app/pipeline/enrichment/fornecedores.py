@@ -22,6 +22,10 @@ _COLUNAS_FORNECEDOR_EXPORTADAS = (
     "data_exclusao_simples_nacional",
     "optante_mei",
     "data_opcao_mei",
+    "mei_discriminado",
+    "fonte_porte",
+    "procedencia_porte",
+    "observado_em",
 )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import re
 from typing import Any
 
@@ -19,12 +20,14 @@ _MAPA_PORTE_EMPRESARIAL = {
     "EMPRESA DE PEQUENO PORTE": "EPP",
     "DEMAIS": "DEMAIS",
     "OUTROS": "DEMAIS",
-    "NAO INFORMADO": "DEMAIS",
-    "1": "MEI",
+    "1": "ME",
     "2": "ME",
     "3": "EPP",
     "5": "DEMAIS",
 }
+
+FONTE_PORTE_ATUAL = "RECEITA_FEDERAL_VIA_OPENCNPJ"
+PROCEDENCIA_PORTE_ATUAL = "RETRATO_ATUAL"
 
 _MARCADORES_AUSENTES = ("", "nao_informado", "NAO INFORMADO")
 
@@ -237,8 +240,12 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         ),
         None,
     )
+    df["mei_discriminado"] = df["porte_padronizado"].eq("MEI").astype("boolean")
     if coluna_mei:
         df["optante_mei"] = df[coluna_mei].map(normalizar_booleano).astype("boolean")
+        df["mei_discriminado"] = (
+            df["mei_discriminado"].fillna(False) | df["optante_mei"].notna()
+        ).astype("boolean")
         mei_confirmado = df["optante_mei"].fillna(False)
         df.loc[mei_confirmado, "porte_padronizado"] = "MEI"
         elegivel = df["porte_padronizado"].eq("ME").astype("boolean")
@@ -260,6 +267,24 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     if coluna_data_opcao_mei:
         df["data_opcao_mei"] = df[coluna_data_opcao_mei]
 
+    porte_identificado = df["porte_padronizado"].notna()
+    observado_em = datetime.now(timezone.utc).isoformat()
+    df["fonte_porte"] = pd.Series(
+        [FONTE_PORTE_ATUAL if identificado else pd.NA for identificado in porte_identificado],
+        index=df.index,
+        dtype="string",
+    )
+    df["procedencia_porte"] = pd.Series(
+        [PROCEDENCIA_PORTE_ATUAL if identificado else pd.NA for identificado in porte_identificado],
+        index=df.index,
+        dtype="string",
+    )
+    df["observado_em"] = pd.Series(
+        [observado_em if identificado else pd.NA for identificado in porte_identificado],
+        index=df.index,
+        dtype="string",
+    )
+
     df["municipio_sede"] = _campo_canonico(df, _COLUNAS_MUNICIPIO_SEDE)
     df["uf_sede"] = _campo_canonico(df, _COLUNAS_UF_SEDE).map(normalizar_uf)
     df["cnae_principal_codigo"] = _campo_canonico(df, _COLUNAS_CNAE_PRINCIPAL_CODIGO).map(normalizar_codigo_cnae)
@@ -270,6 +295,8 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 __all__ = [
+    "FONTE_PORTE_ATUAL",
+    "PROCEDENCIA_PORTE_ATUAL",
     "limpar_fornecedores",
     "normalizar_booleano",
     "normalizar_codigo_cnae",

@@ -134,6 +134,31 @@ class CalcularIndicadoresAnaliticosPrincipaisTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "limite_ranking"):
             kpis.calcular_indicadores_analiticos_principais(self.base, limite_ranking=0)
 
+    def test_mpe_fica_indisponivel_quando_mei_nao_foi_discriminado(self) -> None:
+        base = self.base.copy()
+        base["fornecedor_e_mpe"] = base["fornecedor_e_mpe"].astype("boolean")
+        base.loc[base["porte_fornecedor"].eq("ME"), "fornecedor_e_mpe"] = pd.NA
+
+        indicadores = kpis.calcular_indicadores_analiticos_principais(base)
+
+        resumo = indicadores["resumo_geral"].iloc[0]
+        self.assertEqual(resumo["valor_total"], 35000.0)
+        self.assertEqual(resumo["valor_me"], 10000.0)
+        self.assertTrue(pd.isna(resumo["valor_mpe"]))
+        self.assertTrue(pd.isna(resumo["percentual_mpe"]))
+        self.assertFalse(resumo["mei_discriminado"])
+        self.assertEqual(resumo["estado_mpe"], "INDISPONIVEL")
+        self.assertEqual(resumo["motivo_mpe"], "MEI_NAO_DISCRIMINADO")
+
+        serie = indicadores["serie_mensal"].set_index("ano_mes")
+        self.assertTrue(pd.isna(serie.loc["2025-01", "valor_mpe"]))
+        self.assertFalse(serie.loc["2025-01", "mei_discriminado"])
+        self.assertEqual(serie.loc["2025-01", "estado_mpe"], "INDISPONIVEL")
+        self.assertEqual(serie.loc["2025-01", "motivo_mpe"], "MEI_NAO_DISCRIMINADO")
+        self.assertEqual(serie.loc["2025-02", "valor_mpe"], 0.0)
+        self.assertTrue(serie.loc["2025-02", "mei_discriminado"])
+        self.assertEqual(serie.loc["2025-02", "estado_mpe"], "DISPONIVEL")
+
 
 class CalcularParticipacaoMeLocalTest(unittest.TestCase):
     def setUp(self) -> None:

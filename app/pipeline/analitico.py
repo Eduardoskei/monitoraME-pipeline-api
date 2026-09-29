@@ -33,6 +33,11 @@ COLUNAS_BASE_ANALITICA_TCE = (
     "cnpj_fornecedor",
     "nome_fornecedor",
     "porte_fornecedor",
+    "optante_mei",
+    "mei_discriminado",
+    "fonte_porte",
+    "procedencia_porte",
+    "observado_em",
     "fornecedor_e_me",
     "fornecedor_e_mpe",
     "municipio_sede_fornecedor",
@@ -74,6 +79,24 @@ def _texto_ou_na(valor: Any) -> str | None:
 def _normalizar_cnpj_fornecedor(valor: Any) -> str | None:
     cnpj = normalizar_cnpj(valor)
     return cnpj if cnpj is not None and len(cnpj) == 14 else None
+
+
+def _booleano_ou_na(valor: Any) -> Any:
+    if valor is None:
+        return pd.NA
+    try:
+        if pd.isna(valor):
+            return pd.NA
+    except (TypeError, ValueError):
+        pass
+    if isinstance(valor, bool):
+        return valor
+    texto = str(valor).strip().upper()
+    if texto in {"TRUE", "T", "SIM", "S", "1"}:
+        return True
+    if texto in {"FALSE", "F", "NAO", "N", "0"}:
+        return False
+    return pd.NA
 
 
 def _ano_mes(data: pd.Series) -> pd.Series:
@@ -214,8 +237,39 @@ def montar_base_analitica_tce(
 
     porte = _primeira_coluna(base, ("fornecedor_porte_padronizado", "porte_fornecedor"))
     resultado["porte_fornecedor"] = porte.where(porte.map(valor_preenchido), PORTE_NAO_IDENTIFICADO)
+    resultado["optante_mei"] = _primeira_coluna(
+        base,
+        ("fornecedor_optante_mei", "optante_mei"),
+    ).map(_booleano_ou_na).astype("boolean")
+    resultado["mei_discriminado"] = _primeira_coluna(
+        base,
+        ("fornecedor_mei_discriminado", "mei_discriminado"),
+        padrao=False,
+    ).map(_booleano_ou_na).fillna(False).astype("boolean")
+    resultado["fonte_porte"] = _primeira_coluna(
+        base,
+        ("fornecedor_fonte_porte", "fonte_porte"),
+    )
+    resultado["procedencia_porte"] = _primeira_coluna(
+        base,
+        ("fornecedor_procedencia_porte", "procedencia_porte"),
+    )
+    resultado["observado_em"] = _primeira_coluna(
+        base,
+        ("fornecedor_observado_em", "observado_em"),
+    )
     resultado["fornecedor_e_me"] = resultado["porte_fornecedor"].eq("ME")
-    resultado["fornecedor_e_mpe"] = resultado["porte_fornecedor"].isin(("ME", "EPP"))
+    fornecedor_e_mpe = pd.Series(False, index=resultado.index, dtype="boolean")
+    fornecedor_e_mpe.loc[resultado["porte_fornecedor"].eq("EPP")] = True
+    me = resultado["porte_fornecedor"].eq("ME")
+    mei_confirmado = resultado["optante_mei"].eq(True).fillna(False)
+    nao_mei_confirmado = resultado["optante_mei"].eq(False).fillna(False)
+    fornecedor_e_mpe.loc[me & resultado["mei_discriminado"] & nao_mei_confirmado] = True
+    fornecedor_e_mpe.loc[me & resultado["mei_discriminado"] & mei_confirmado] = False
+    fornecedor_e_mpe.loc[
+        me & (~resultado["mei_discriminado"] | resultado["optante_mei"].isna())
+    ] = pd.NA
+    resultado["fornecedor_e_mpe"] = fornecedor_e_mpe
 
     resultado["municipio_sede_fornecedor"] = _primeira_coluna(
         base,

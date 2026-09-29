@@ -67,6 +67,7 @@ FORNECEDORES = [
             "municipio": "AMONTADA",
             "uf": "CE",
             "cnae_principal": "4711302",
+            "simples_mei": {"opcao_mei": "N"},
         },
         "opencnpj_status": "ok",
     },
@@ -144,6 +145,11 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
         self.assertEqual(janeiro["valor_anulado"], 1_000.0)
         self.assertEqual(janeiro["valor"], 9_000.0)
         self.assertEqual(janeiro["porte_fornecedor"], "ME")
+        self.assertFalse(janeiro["optante_mei"])
+        self.assertTrue(janeiro["mei_discriminado"])
+        self.assertEqual(janeiro["fonte_porte"], "RECEITA_FEDERAL_VIA_OPENCNPJ")
+        self.assertEqual(janeiro["procedencia_porte"], "RETRATO_ATUAL")
+        self.assertIsNotNone(janeiro["observado_em"])
         self.assertEqual(janeiro["origem_geografica"], "Sediado no município comprador")
 
     @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote", return_value=[])
@@ -233,6 +239,9 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
         self.assertEqual(resumo["valor_total"], 23_000.0)
         self.assertEqual(resumo["valor_me"], 8_000.0)
         self.assertEqual(resumo["valor_mpe"], 23_000.0)
+        self.assertTrue(resumo["mei_discriminado"])
+        self.assertEqual(resumo["estado_mpe"], "DISPONIVEL")
+        self.assertIsNone(resumo["motivo_mpe"])
         self.assertEqual(portes["totais"]["empenhos"], 2)
         linha_me = next(linha for linha in portes["dados"] if linha["porte"] == "ME")
         self.assertEqual(linha_me["total_empenhos"], 2)
