@@ -113,6 +113,26 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_adiciona_mapeamento_de_municipios_tce(self) -> None:
+        migration = (
+            ROOT
+            / "alembic"
+            / "main"
+            / "versions"
+            / "0004_tce_municipios.py"
+        )
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.revision, "0004_tce_municipios")
+        self.assertEqual(modulo.down_revision, "0003_remove_pncp")
+        self.assertIn('"tce_municipios"', texto)
+        self.assertIn('"codigo_municipio_tce"', texto)
+        self.assertIn('"codigo_municipio_ibge"', texto)
+        self.assertIn('sa.UniqueConstraint("codigo_municipio_ibge")', texto)
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
 
 if __name__ == "__main__":
     unittest.main()
