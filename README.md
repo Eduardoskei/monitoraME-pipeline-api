@@ -107,6 +107,18 @@ dois valores. Os indicadores geográficos e o destino dos recursos usam
 exclusivamente ME e MEI. Origem não identificada permanece no denominador
 geográfico, sem ser tratada como recurso local ou externo.
 
+O KPI `total_compras_ME_centavos` representa a soma líquida de ME e MEI no
+período completo.
+
+`participacao_por_porte_empresarial` apresenta valor e percentual de `ME`,
+`MEI`, `OUTROS_PORTES` (`EPP + DEMAIS`) e `NAO_IDENTIFICADO`. Nesse indicador,
+o denominador inclui as quatro categorias para que seus percentuais totalizem
+`100` quando houver valor no período.
+
+`elementos_despesa` apresenta os sete elementos monitorados no período total,
+com código de dois dígitos, nome e valor líquido em centavos. O cálculo usa
+somente empenhos de ME e MEI e mantém elementos sem movimento com valor zero.
+
 Valores monetários são inteiros em centavos e percentuais variam de `0` a
 `100`. Um período publicado sem compras de porte identificado retorna `200`,
 KPIs zerados, evolução vazia e os quatro destinos com valor e percentual zero.

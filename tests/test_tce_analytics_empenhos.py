@@ -264,12 +264,14 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
                         "valor": 80.0,
                         "porte_fornecedor": "ME",
                         "origem_geografica": "Sediado no município comprador",
+                        "natureza_despesa_codigo": "30",
                     },
                     {
                         "ano_mes": "2025-01",
                         "valor": 20.0,
                         "porte_fornecedor": "MEI",
                         "origem_geografica": "Outro município do Ceará",
+                        "natureza_despesa_codigo": "39",
                     },
                 ]
             ),
@@ -302,7 +304,7 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
         self.assertEqual(resultado["unidade_monetaria"], "CENTAVOS")
         self.assertEqual(resultado["kpis"]["percentual_participacao_me"], 100.0)
         self.assertEqual(
-            resultado["kpis"]["total_compras_consideradas_centavos"],
+            resultado["kpis"]["total_compras_ME_centavos"],
             10_000,
         )
 
