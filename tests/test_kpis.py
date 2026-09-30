@@ -202,6 +202,7 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
                 },
             ]
         )
+        base["natureza_despesa_codigo"] = ["30", "30", "39", "39", "51", "52"]
 
         resultado = kpis.calcular_overview_me_mei(base)
 
@@ -210,8 +211,8 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
             200 / 700 * 100,
         )
         self.assertEqual(
-            resultado["kpis"]["total_compras_consideradas_centavos"],
-            70_000,
+            resultado["kpis"]["total_compras_ME_centavos"],
+            20_000,
         )
         self.assertEqual(
             resultado["kpis"]["percentual_compras_fornecedores_locais"],
@@ -221,6 +222,37 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
             resultado["kpis"]["percentual_recursos_fora_municipio"],
             40.0,
         )
+        participacao = resultado["participacao_por_porte_empresarial"]
+        self.assertEqual(
+            [item["porte"] for item in participacao],
+            ["ME", "MEI", "OUTROS_PORTES", "NAO_IDENTIFICADO"],
+        )
+        self.assertEqual(
+            [item["valor_centavos"] for item in participacao],
+            [13_000, 7_000, 50_000, 80_000],
+        )
+        self.assertAlmostEqual(
+            sum(item["percentual"] for item in participacao),
+            100.0,
+        )
+        elementos = resultado["elementos_despesa"]
+        self.assertEqual(
+            [item["codigo"] for item in elementos],
+            ["30", "32", "35", "39", "40", "51", "52"],
+        )
+        self.assertEqual(
+            {item["codigo"]: item["valor_liquido_centavos"] for item in elementos},
+            {
+                "30": 15_000,
+                "32": 0,
+                "35": 0,
+                "39": 5_000,
+                "40": 0,
+                "51": 0,
+                "52": 0,
+            },
+        )
+        self.assertEqual(elementos[0]["nome"], "Material de consumo")
         self.assertEqual(
             resultado["evolucao_compras_consideradas"],
             [
@@ -267,7 +299,7 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
             ],
         )
 
-    def test_periodo_so_com_epp_mantem_denominador_sem_expor_destino(self) -> None:
+    def test_periodo_so_com_epp_mantem_denominador_sem_total_me(self) -> None:
         base = pd.DataFrame(
             [
                 {
@@ -278,6 +310,7 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
                 }
             ]
         )
+        base["natureza_despesa_codigo"] = "30"
 
         resultado = kpis.calcular_overview_me_mei(base)
 
@@ -285,7 +318,7 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
             resultado["kpis"],
             {
                 "percentual_participacao_me": 0.0,
-                "total_compras_consideradas_centavos": 10_000,
+                "total_compras_ME_centavos": 0,
                 "percentual_compras_fornecedores_locais": 0.0,
                 "percentual_recursos_fora_municipio": 0.0,
             },
@@ -318,12 +351,61 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
                 }
             ]
         )
+        base["natureza_despesa_codigo"] = "30"
 
         resultado = kpis.calcular_overview_me_mei(base)
 
-        self.assertEqual(resultado["kpis"]["total_compras_consideradas_centavos"], 0)
+        self.assertEqual(resultado["kpis"]["total_compras_ME_centavos"], 0)
         self.assertEqual(resultado["kpis"]["percentual_participacao_me"], 0.0)
         self.assertEqual(resultado["evolucao_compras_consideradas"], [])
+        self.assertEqual(
+            resultado["participacao_por_porte_empresarial"][-1],
+            {
+                "porte": "NAO_IDENTIFICADO",
+                "valor_centavos": 10_000,
+                "percentual": 100.0,
+            },
+        )
+
+    def test_participacao_por_porte_agrega_epp_e_demais(self) -> None:
+        base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": valor,
+                    "porte_fornecedor": porte,
+                    "origem_geografica": "Nao identificada",
+                }
+                for porte, valor in (
+                    ("ME", 40.0),
+                    ("MEI", 10.0),
+                    ("EPP", 20.0),
+                    ("DEMAIS", 10.0),
+                    ("NAO_IDENTIFICADO", 20.0),
+                )
+            ]
+        )
+        base["natureza_despesa_codigo"] = "30"
+
+        resultado = kpis.calcular_overview_me_mei(base)
+
+        self.assertEqual(
+            resultado["participacao_por_porte_empresarial"],
+            [
+                {"porte": "ME", "valor_centavos": 4_000, "percentual": 40.0},
+                {"porte": "MEI", "valor_centavos": 1_000, "percentual": 10.0},
+                {
+                    "porte": "OUTROS_PORTES",
+                    "valor_centavos": 3_000,
+                    "percentual": 30.0,
+                },
+                {
+                    "porte": "NAO_IDENTIFICADO",
+                    "valor_centavos": 2_000,
+                    "percentual": 20.0,
+                },
+            ],
+        )
 
 
 class CalcularParticipacaoMeLocalTest(unittest.TestCase):

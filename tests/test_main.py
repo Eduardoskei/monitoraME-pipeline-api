@@ -192,10 +192,12 @@ class MainTest(unittest.TestCase):
             "unidade_monetaria": "CENTAVOS",
             "kpis": {
                 "percentual_participacao_me": 75.0,
-                "total_compras_consideradas_centavos": 100_000,
+                "total_compras_ME_centavos": 100_000,
                 "percentual_compras_fornecedores_locais": 50.0,
                 "percentual_recursos_fora_municipio": 40.0,
             },
+            "participacao_por_porte_empresarial": [],
+            "elementos_despesa": [],
             "evolucao_compras_consideradas": [],
             "destino_recursos": [],
         }
@@ -213,7 +215,7 @@ class MainTest(unittest.TestCase):
         )
         self.assertEqual(payload["kpi"], "overview_me_mei")
         self.assertEqual(
-            payload["kpis"]["total_compras_consideradas_centavos"],
+            payload["kpis"]["total_compras_ME_centavos"],
             100_000,
         )
 

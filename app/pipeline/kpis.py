@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 
+from app.core.config import NATUREZAS_DESPESA_MONITORADAS
 from app.pipeline.cleaners.opencnpj import normalizar_porte_empresarial
 from app.utils import normalizar_chave_entidade, normalizar_cnpj
 
@@ -49,6 +50,13 @@ INDICADORES_ANALITICOS_PRINCIPAIS = (
 
 PORTES_OVERVIEW = ("ME", "MEI")
 PORTES_COMPRAS_CONSIDERADAS_OVERVIEW = ("ME", "MEI", "EPP", "DEMAIS")
+
+PORTES_PARTICIPACAO_OVERVIEW = (
+    ("ME", ("ME",)),
+    ("MEI", ("MEI",)),
+    ("OUTROS_PORTES", ("EPP", "DEMAIS")),
+    ("NAO_IDENTIFICADO", ("NAO_IDENTIFICADO",)),
+)
 
 DESTINOS_RECURSOS_OVERVIEW = (
     ("NO_MUNICIPIO_COMPRADOR", ORIGEM_FORNECEDOR_LOCAL),
@@ -622,25 +630,69 @@ def calcular_overview_me_mei(base_analitica: pd.DataFrame) -> dict[str, object]:
     """Calcula o overview restrito a ME e MEI sobre empenhos líquidos.
 
     ``compras_consideradas`` representa todos os portes identificados. A
-    participação compara ME + MEI contra esse total. Os demais indicadores e
-    o detalhamento público continuam restritos a ME + MEI.
+    participação compara ME + MEI contra esse total. O detalhamento por porte
+    inclui ainda os valores não identificados em seu próprio denominador. Os
+    indicadores geográficos continuam restritos a ME + MEI.
     """
     _validar_colunas(
         base_analitica,
-        ["ano_mes", "valor", "porte_fornecedor", "origem_geografica"],
+        [
+            "ano_mes",
+            "valor",
+            "porte_fornecedor",
+            "origem_geografica",
+            "natureza_despesa_codigo",
+        ],
         "overview ME e MEI",
     )
 
-    compras = base_analitica.loc[
-        base_analitica["porte_fornecedor"].isin(
+    todos = base_analitica.copy()
+    todos["_valor_centavos"] = todos["valor"].map(_valor_reais_para_centavos)
+    todos["_porte_overview"] = todos["porte_fornecedor"].where(
+        todos["porte_fornecedor"].isin(PORTES_COMPRAS_CONSIDERADAS_OVERVIEW),
+        "NAO_IDENTIFICADO",
+    )
+
+    compras = todos.loc[
+        todos["_porte_overview"].isin(
             PORTES_COMPRAS_CONSIDERADAS_OVERVIEW
         )
     ].copy()
-    compras["_valor_centavos"] = compras["valor"].map(_valor_reais_para_centavos)
-    base = compras.loc[compras["porte_fornecedor"].isin(PORTES_OVERVIEW)].copy()
+    base = compras.loc[compras["_porte_overview"].isin(PORTES_OVERVIEW)].copy()
 
     compras_consideradas = _somar_centavos(compras["_valor_centavos"])
     microempresas = _somar_centavos(base["_valor_centavos"])
+
+    elementos_despesa = [
+        {
+            "codigo": codigo,
+            "nome": NATUREZAS_DESPESA_MONITORADAS[codigo],
+            "valor_liquido_centavos": _somar_centavos(
+                base.loc[
+                    base["natureza_despesa_codigo"].eq(codigo),
+                    "_valor_centavos",
+                ]
+            ),
+        }
+        for codigo in sorted(NATUREZAS_DESPESA_MONITORADAS)
+    ]
+
+    total_todos_portes = _somar_centavos(todos["_valor_centavos"])
+    participacao_por_porte = []
+    for categoria, portes in PORTES_PARTICIPACAO_OVERVIEW:
+        valor_categoria = _somar_centavos(
+            todos.loc[todos["_porte_overview"].isin(portes), "_valor_centavos"]
+        )
+        participacao_por_porte.append(
+            {
+                "porte": categoria,
+                "valor_centavos": valor_categoria,
+                "percentual": _percentual_0_a_100(
+                    valor_categoria,
+                    total_todos_portes,
+                ),
+            }
+        )
 
     origem = base["origem_geografica"].where(
         base["origem_geografica"].isin(
@@ -703,7 +755,7 @@ def calcular_overview_me_mei(base_analitica: pd.DataFrame) -> dict[str, object]:
                 microempresas,
                 compras_consideradas,
             ),
-            "total_compras_consideradas_centavos": compras_consideradas,
+            "total_compras_ME_centavos": microempresas,
             "percentual_compras_fornecedores_locais": _percentual_0_a_100(
                 valor_local,
                 microempresas,
@@ -713,6 +765,8 @@ def calcular_overview_me_mei(base_analitica: pd.DataFrame) -> dict[str, object]:
                 microempresas,
             ),
         },
+        "participacao_por_porte_empresarial": participacao_por_porte,
+        "elementos_despesa": elementos_despesa,
         "evolucao_compras_consideradas": evolucao,
         "destino_recursos": destino_recursos,
     }
