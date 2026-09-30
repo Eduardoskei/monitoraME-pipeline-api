@@ -384,3 +384,33 @@ def consultar_kpi_tce_portes_por_mes(
         "kpi": "participacao_por_porte_por_mes",
         "dados": dataframe_para_registros(resultado, limite=limite),
     }
+
+
+def consultar_overview_tce(
+    data_inicial: str,
+    data_final: str,
+    *,
+    codigo_municipio: str = CODIGO_MUNICIPIO_TCE_PADRAO,
+    throttle_fornecedores: float = 0.3,
+) -> dict[str, Any]:
+    base, metadados = montar_base_analitica_tce(
+        data_inicial,
+        data_final,
+        codigo_municipio=codigo_municipio,
+        throttle_fornecedores=throttle_fornecedores,
+    )
+    overview = kpis.calcular_overview_me_mei(base)
+    return {
+        **metadados,
+        "kpi": "overview_me_mei",
+        "escopo": {
+            "portes_considerados": list(kpis.PORTES_OVERVIEW),
+            "portes_no_denominador_participacao": list(
+                kpis.PORTES_COMPRAS_CONSIDERADAS_OVERVIEW
+            ),
+            "regra_participacao_me": "(ME + MEI) / (ME + MEI + EPP + DEMAIS)",
+            "regra_geografica": "ME + MEI",
+        },
+        "unidade_monetaria": "CENTAVOS",
+        **overview,
+    }

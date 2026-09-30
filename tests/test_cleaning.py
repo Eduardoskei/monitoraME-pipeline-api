@@ -302,13 +302,17 @@ class LimparFornecedoresTest(unittest.TestCase):
         df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "11444777000161",
-                "opencnpj": {"porte_empresa": "MICRO EMPRESA"},
+                "opencnpj": {
+                    "porte_empresa": "Microempresa (ME)",
+                    "opcao_mei": "N",
+                },
             }
         ])
 
         self.assertEqual(df.iloc[0]["porte_padronizado"], "ME")
         self.assertTrue(df.iloc[0]["elegivel_me"])
-        self.assertFalse(df.iloc[0]["mei_discriminado"])
+        self.assertTrue(df.iloc[0]["mei_discriminado"])
+        self.assertFalse(df.iloc[0]["optante_mei"])
 
     @patch("app.pipeline.ingestion.fornecedores.buscar_opencnpj")
     def test_pipeline_com_schema_receita_do_opencnpj_org(self, mock_opencnpj) -> None:
@@ -353,7 +357,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         df = opencnpj_cleaning.limpar_fornecedores([
             {
                 "cnpj": "98765432000111",
-                "opencnpj": {"porte_empresa": "EMPRESA DE PEQUENO PORTE"},
+                "opencnpj": {"porte_empresa": "Empresa de Pequeno Porte (EPP)"},
             }
         ])
 

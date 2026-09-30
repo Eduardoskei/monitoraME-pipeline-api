@@ -88,9 +88,28 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 
 - `GET /pipeline/tce/contratos`: consulta e enriquece contratos do TCE-CE.
 - `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
+- `GET /pipeline/tce/overview`: calcula o overview exclusivo de ME e MEI.
 - `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
+
+### Overview de ME e MEI
+
+`GET /pipeline/tce/overview` recebe `data_inicial`, `data_final` e
+`codigo_municipio`. A rota atualiza as competências e o cadastro dos
+fornecedores antes do cálculo, mas restringe sua resposta a empenhos líquidos
+de ME e MEI. Essa restrição não altera os demais indicadores da API.
+
+O total de compras consideradas corresponde aos portes identificados `ME +
+MEI + EPP + DEMAIS`. A participação é `(ME + MEI) / compras consideradas`;
+portes não identificados ficam fora da razão. A evolução mensal compara esses
+dois valores. Os indicadores geográficos e o destino dos recursos usam
+exclusivamente ME e MEI. Origem não identificada permanece no denominador
+geográfico, sem ser tratada como recurso local ou externo.
+
+Valores monetários são inteiros em centavos e percentuais variam de `0` a
+`100`. Um período publicado sem compras de porte identificado retorna `200`,
+KPIs zerados, evolução vazia e os quatro destinos com valor e percentual zero.
 
 ## Persistência
 

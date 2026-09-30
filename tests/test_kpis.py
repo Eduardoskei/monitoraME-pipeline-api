@@ -160,6 +160,172 @@ class CalcularIndicadoresAnaliticosPrincipaisTest(unittest.TestCase):
         self.assertEqual(serie.loc["2025-02", "estado_mpe"], "DISPONIVEL")
 
 
+class CalcularOverviewMeMeiTest(unittest.TestCase):
+    def test_restringe_escopo_e_calcula_kpis_e_series_em_centavos(self) -> None:
+        base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 100.0,
+                    "porte_fornecedor": "ME",
+                    "origem_geografica": "Sediado no município comprador",
+                },
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 50.0,
+                    "porte_fornecedor": "MEI",
+                    "origem_geografica": "Outro município do Ceará",
+                },
+                {
+                    "ano_mes": "2025-02",
+                    "valor": 30.0,
+                    "porte_fornecedor": "ME",
+                    "origem_geografica": "Fora do estado",
+                },
+                {
+                    "ano_mes": "2025-02",
+                    "valor": 20.0,
+                    "porte_fornecedor": "MEI",
+                    "origem_geografica": "Nao identificada",
+                },
+                {
+                    "ano_mes": "2025-03",
+                    "valor": 500.0,
+                    "porte_fornecedor": "EPP",
+                    "origem_geografica": "Sediado no município comprador",
+                },
+                {
+                    "ano_mes": "2025-04",
+                    "valor": 800.0,
+                    "porte_fornecedor": "NAO_IDENTIFICADO",
+                    "origem_geografica": "Nao identificada",
+                },
+            ]
+        )
+
+        resultado = kpis.calcular_overview_me_mei(base)
+
+        self.assertAlmostEqual(
+            resultado["kpis"]["percentual_participacao_me"],
+            200 / 700 * 100,
+        )
+        self.assertEqual(
+            resultado["kpis"]["total_compras_consideradas_centavos"],
+            70_000,
+        )
+        self.assertEqual(
+            resultado["kpis"]["percentual_compras_fornecedores_locais"],
+            50.0,
+        )
+        self.assertEqual(
+            resultado["kpis"]["percentual_recursos_fora_municipio"],
+            40.0,
+        )
+        self.assertEqual(
+            resultado["evolucao_compras_consideradas"],
+            [
+                {
+                    "periodo": "2025-01",
+                    "compras_consideradas_centavos": 15_000,
+                    "microempresas_centavos": 15_000,
+                },
+                {
+                    "periodo": "2025-02",
+                    "compras_consideradas_centavos": 5_000,
+                    "microempresas_centavos": 5_000,
+                },
+                {
+                    "periodo": "2025-03",
+                    "compras_consideradas_centavos": 50_000,
+                    "microempresas_centavos": 0,
+                },
+            ],
+        )
+        self.assertEqual(
+            resultado["destino_recursos"],
+            [
+                {
+                    "destino": "NO_MUNICIPIO_COMPRADOR",
+                    "valor_centavos": 10_000,
+                    "percentual": 50.0,
+                },
+                {
+                    "destino": "EM_OUTRO_MUNICIPIO",
+                    "valor_centavos": 5_000,
+                    "percentual": 25.0,
+                },
+                {
+                    "destino": "FORA_DO_CEARA",
+                    "valor_centavos": 3_000,
+                    "percentual": 15.0,
+                },
+                {
+                    "destino": "ORIGEM_NAO_IDENTIFICADA",
+                    "valor_centavos": 2_000,
+                    "percentual": 10.0,
+                },
+            ],
+        )
+
+    def test_periodo_so_com_epp_mantem_denominador_sem_expor_destino(self) -> None:
+        base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 100.0,
+                    "porte_fornecedor": "EPP",
+                    "origem_geografica": "Sediado no município comprador",
+                }
+            ]
+        )
+
+        resultado = kpis.calcular_overview_me_mei(base)
+
+        self.assertEqual(
+            resultado["kpis"],
+            {
+                "percentual_participacao_me": 0.0,
+                "total_compras_consideradas_centavos": 10_000,
+                "percentual_compras_fornecedores_locais": 0.0,
+                "percentual_recursos_fora_municipio": 0.0,
+            },
+        )
+        self.assertEqual(
+            resultado["evolucao_compras_consideradas"],
+            [
+                {
+                    "periodo": "2025-01",
+                    "compras_consideradas_centavos": 10_000,
+                    "microempresas_centavos": 0,
+                }
+            ],
+        )
+        self.assertTrue(
+            all(item["valor_centavos"] == 0 for item in resultado["destino_recursos"])
+        )
+        self.assertTrue(
+            all(item["percentual"] == 0.0 for item in resultado["destino_recursos"])
+        )
+
+    def test_periodo_sem_porte_identificado_retorna_zeros(self) -> None:
+        base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": 100.0,
+                    "porte_fornecedor": "NAO_IDENTIFICADO",
+                    "origem_geografica": "Nao identificada",
+                }
+            ]
+        )
+
+        resultado = kpis.calcular_overview_me_mei(base)
+
+        self.assertEqual(resultado["kpis"]["total_compras_consideradas_centavos"], 0)
+        self.assertEqual(resultado["kpis"]["percentual_participacao_me"], 0.0)
+        self.assertEqual(resultado["evolucao_compras_consideradas"], [])
+
+
 class CalcularParticipacaoMeLocalTest(unittest.TestCase):
     def setUp(self) -> None:
         self.licitacoes = pd.DataFrame([

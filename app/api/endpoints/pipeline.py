@@ -123,6 +123,36 @@ def tce_kpi_portes_por_mes(
     except Exception as error:
         raise _erro_pipeline(error) from error
 
+
+@router.get(
+    "/tce/overview",
+    summary="Consulta o overview de ME e MEI",
+    description=(
+        "Atualiza as competências solicitadas, calcula a participação de ME + MEI "
+        "nas compras de porte identificado e restringe o detalhamento geográfico "
+        "a ME e MEI."
+    ),
+    response_description="KPIs, evolução mensal e destino dos recursos de ME e MEI.",
+)
+def tce_overview(
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
+    codigo_municipio: Annotated[
+        str,
+        Query(description="Código do município no TCE-CE."),
+    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
+) -> dict[str, object]:
+    try:
+        _validar_periodo_api(data_inicial, data_final)
+        return analisys.consultar_overview_tce(
+            data_inicial=data_inicial,
+            data_final=data_final,
+            codigo_municipio=codigo_municipio,
+        )
+    except Exception as error:
+        raise _erro_pipeline(error) from error
+
+
 @router.get(
     "/tce/analitico/indicadores",
     summary="Calcula indicadores analiticos principais do TCE-CE",

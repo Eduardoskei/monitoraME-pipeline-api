@@ -19,7 +19,13 @@ class FonteCadastralIndisponivelError(RuntimeError):
 
 def normalizar_porte_me(valor: Any) -> str | None:
     texto = _normalizar_texto(valor)
-    if texto in {"ME", "MICRO EMPRESA", "MICROEMPRESA"}:
+    if texto in {
+        "ME",
+        "MICRO EMPRESA",
+        "MICROEMPRESA",
+        "MICRO EMPRESA (ME)",
+        "MICROEMPRESA (ME)",
+    }:
         return "ME"
 
     return None
