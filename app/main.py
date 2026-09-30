@@ -7,6 +7,7 @@ from app.api.endpoints.pipeline import (
     tce_analitico_indicadores,
     tce_contratos,
     tce_kpi_portes_por_mes,
+    tce_overview,
 )
 from app.api.router import router
 from app.pipeline import analisys
@@ -19,6 +20,7 @@ __all__ = [
     "tce_analitico_indicadores",
     "tce_contratos",
     "tce_kpi_portes_por_mes",
+    "tce_overview",
 ]
 
 

@@ -81,6 +81,7 @@ class MainTest(unittest.TestCase):
         self.assertIn("/pipeline/tce/contratos", rotas)
         self.assertNotIn("/pipeline/tce/kpis/me-por-mes", rotas)
         self.assertIn("/pipeline/tce/kpis/portes-por-mes", rotas)
+        self.assertIn("/pipeline/tce/overview", rotas)
         self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
 
     @patch("app.main.database.close_pool")
@@ -170,6 +171,7 @@ class MainTest(unittest.TestCase):
         for endpoint in (
             main.tce_contratos,
             main.tce_kpi_portes_por_mes,
+            main.tce_overview,
             main.tce_analitico_indicadores,
         ):
             with self.subTest(endpoint=endpoint.__name__):
@@ -178,6 +180,42 @@ class MainTest(unittest.TestCase):
 
                 self.assertEqual(contexto.exception.status_code, 422)
                 self.assertIn("YYYY-MM-DD", contexto.exception.detail)
+
+    @patch("app.main.analisys.consultar_overview_tce")
+    def test_endpoint_tce_overview_retorna_contrato_serializado(
+        self,
+        consultar_overview,
+    ) -> None:
+        consultar_overview.return_value = {
+            "fonte": "TCE-CE",
+            "kpi": "overview_me_mei",
+            "unidade_monetaria": "CENTAVOS",
+            "kpis": {
+                "percentual_participacao_me": 75.0,
+                "total_compras_consideradas_centavos": 100_000,
+                "percentual_compras_fornecedores_locais": 50.0,
+                "percentual_recursos_fora_municipio": 40.0,
+            },
+            "evolucao_compras_consideradas": [],
+            "destino_recursos": [],
+        }
+
+        payload = main.tce_overview(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+        )
+
+        consultar_overview.assert_called_once_with(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+        )
+        self.assertEqual(payload["kpi"], "overview_me_mei")
+        self.assertEqual(
+            payload["kpis"]["total_compras_consideradas_centavos"],
+            100_000,
+        )
 
     @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
     def test_endpoint_analitico_mapeia_falha_total_de_competencias_para_503(

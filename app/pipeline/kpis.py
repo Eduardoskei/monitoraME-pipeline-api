@@ -11,6 +11,8 @@ canônicos; coleta, anulações e enriquecimento são resolvidos antes dela.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+
 import pandas as pd
 
 from app.pipeline.cleaners.opencnpj import normalizar_porte_empresarial
@@ -21,6 +23,9 @@ class DadosInsuficientesKPI(ValueError):
 
 
 ORIGEM_FORNECEDOR_LOCAL = "Sediado no município comprador"
+ORIGEM_FORNECEDOR_OUTRO_MUNICIPIO_CE = "Outro município do Ceará"
+ORIGEM_FORNECEDOR_FORA_CE = "Fora do estado"
+ORIGEM_FORNECEDOR_NAO_IDENTIFICADA = "Nao identificada"
 ESTADO_MPE_DISPONIVEL = "DISPONIVEL"
 ESTADO_MPE_INDISPONIVEL = "INDISPONIVEL"
 MOTIVO_MPE_NAO_DISCRIMINADO = "MEI_NAO_DISCRIMINADO"
@@ -40,6 +45,16 @@ INDICADORES_ANALITICOS_PRINCIPAIS = (
     "por_porte_fornecedor",
     "por_natureza_despesa",
     "ranking_fornecedores",
+)
+
+PORTES_OVERVIEW = ("ME", "MEI")
+PORTES_COMPRAS_CONSIDERADAS_OVERVIEW = ("ME", "MEI", "EPP", "DEMAIS")
+
+DESTINOS_RECURSOS_OVERVIEW = (
+    ("NO_MUNICIPIO_COMPRADOR", ORIGEM_FORNECEDOR_LOCAL),
+    ("EM_OUTRO_MUNICIPIO", ORIGEM_FORNECEDOR_OUTRO_MUNICIPIO_CE),
+    ("FORA_DO_CEARA", ORIGEM_FORNECEDOR_FORA_CE),
+    ("ORIGEM_NAO_IDENTIFICADA", ORIGEM_FORNECEDOR_NAO_IDENTIFICADA),
 )
 
 
@@ -62,6 +77,40 @@ def _percentual_valor(numerador: object, denominador: object) -> object:
     if pd.isna(numerador) or pd.isna(denominador) or float(denominador) == 0:
         return pd.NA
     return float(numerador) / float(denominador)
+
+
+def _percentual_0_a_100(numerador: int, denominador: int) -> float:
+    if denominador == 0:
+        return 0.0
+    return float(Decimal(numerador) * Decimal(100) / Decimal(denominador))
+
+
+def _valor_reais_para_centavos(valor: object) -> object:
+    if pd.isna(valor):
+        return pd.NA
+
+    try:
+        centavos = Decimal(str(valor)) * 100
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise DadosInsuficientesKPI(
+            "[INDISPONIVEL] overview: valor monetario invalido."
+        ) from error
+
+    if not centavos.is_finite() or centavos != centavos.to_integral_value():
+        raise DadosInsuficientesKPI(
+            "[INDISPONIVEL] overview: valor monetario deve ter precisao de centavos."
+        )
+
+    inteiro = int(centavos)
+    if inteiro < 0:
+        raise DadosInsuficientesKPI(
+            "[INDISPONIVEL] overview: empenho liquido negativo."
+        )
+    return inteiro
+
+
+def _somar_centavos(serie: pd.Series) -> int:
+    return sum(int(valor) for valor in serie.dropna())
 
 
 def _booleano_estrito(serie: pd.Series) -> pd.Series:
@@ -567,3 +616,103 @@ def calcular_participacao_por_porte_por_mes(
         coluna_valor=coluna_valor,
         coluna_porte=coluna_porte,
     )
+
+
+def calcular_overview_me_mei(base_analitica: pd.DataFrame) -> dict[str, object]:
+    """Calcula o overview restrito a ME e MEI sobre empenhos líquidos.
+
+    ``compras_consideradas`` representa todos os portes identificados. A
+    participação compara ME + MEI contra esse total. Os demais indicadores e
+    o detalhamento público continuam restritos a ME + MEI.
+    """
+    _validar_colunas(
+        base_analitica,
+        ["ano_mes", "valor", "porte_fornecedor", "origem_geografica"],
+        "overview ME e MEI",
+    )
+
+    compras = base_analitica.loc[
+        base_analitica["porte_fornecedor"].isin(
+            PORTES_COMPRAS_CONSIDERADAS_OVERVIEW
+        )
+    ].copy()
+    compras["_valor_centavos"] = compras["valor"].map(_valor_reais_para_centavos)
+    base = compras.loc[compras["porte_fornecedor"].isin(PORTES_OVERVIEW)].copy()
+
+    compras_consideradas = _somar_centavos(compras["_valor_centavos"])
+    microempresas = _somar_centavos(base["_valor_centavos"])
+
+    origem = base["origem_geografica"].where(
+        base["origem_geografica"].isin(
+            {origem_canonica for _, origem_canonica in DESTINOS_RECURSOS_OVERVIEW}
+        ),
+        ORIGEM_FORNECEDOR_NAO_IDENTIFICADA,
+    )
+    base["_origem_overview"] = origem.fillna(ORIGEM_FORNECEDOR_NAO_IDENTIFICADA)
+
+    por_origem = {
+        origem_canonica: _somar_centavos(
+            base.loc[base["_origem_overview"].eq(origem_canonica), "_valor_centavos"]
+        )
+        for _, origem_canonica in DESTINOS_RECURSOS_OVERVIEW
+    }
+    valor_local = por_origem[ORIGEM_FORNECEDOR_LOCAL]
+    valor_fora_municipio = (
+        por_origem[ORIGEM_FORNECEDOR_OUTRO_MUNICIPIO_CE]
+        + por_origem[ORIGEM_FORNECEDOR_FORA_CE]
+    )
+
+    evolucao: list[dict[str, object]] = []
+    periodos = sorted(
+        str(periodo)
+        for periodo in compras["ano_mes"].dropna().unique()
+        if str(periodo).strip()
+    )
+    for periodo in periodos:
+        mensal = compras.loc[compras["ano_mes"].astype("string").eq(periodo)]
+        mensal_microempresas = mensal.loc[
+            mensal["porte_fornecedor"].isin(PORTES_OVERVIEW)
+        ]
+        evolucao.append(
+            {
+                "periodo": periodo,
+                "compras_consideradas_centavos": _somar_centavos(
+                    mensal["_valor_centavos"]
+                ),
+                "microempresas_centavos": _somar_centavos(
+                    mensal_microempresas["_valor_centavos"]
+                ),
+            }
+        )
+
+    destino_recursos = [
+        {
+            "destino": destino,
+            "valor_centavos": por_origem[origem_canonica],
+            "percentual": _percentual_0_a_100(
+                por_origem[origem_canonica],
+                microempresas,
+            ),
+        }
+        for destino, origem_canonica in DESTINOS_RECURSOS_OVERVIEW
+    ]
+
+    return {
+        "kpis": {
+            "percentual_participacao_me": _percentual_0_a_100(
+                microempresas,
+                compras_consideradas,
+            ),
+            "total_compras_consideradas_centavos": compras_consideradas,
+            "percentual_compras_fornecedores_locais": _percentual_0_a_100(
+                valor_local,
+                microempresas,
+            ),
+            "percentual_recursos_fora_municipio": _percentual_0_a_100(
+                valor_fora_municipio,
+                microempresas,
+            ),
+        },
+        "evolucao_compras_consideradas": evolucao,
+        "destino_recursos": destino_recursos,
+    }

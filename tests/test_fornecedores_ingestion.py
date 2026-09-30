@@ -28,6 +28,7 @@ class FornecedoresIngestionTest(unittest.TestCase):
         self.assertEqual(fornecedores.normalizar_porte_me("ME"), "ME")
         self.assertEqual(fornecedores.normalizar_porte_me("MICRO EMPRESA"), "ME")
         self.assertEqual(fornecedores.normalizar_porte_me("micro-empresa"), "ME")
+        self.assertEqual(fornecedores.normalizar_porte_me("Microempresa (ME)"), "ME")
         self.assertIsNone(fornecedores.normalizar_porte_me("EPP"))
 
     def test_extracao_usa_apenas_campos_receita_do_opencnpj_org(self) -> None:

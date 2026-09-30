@@ -7,6 +7,8 @@ import sys
 import unittest
 from unittest.mock import call, patch
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/monitorame_test")
@@ -61,9 +63,9 @@ FORNECEDORES = [
     {
         "cnpj": "11444777000161",
         "razao_social": "Comercio Local LTDA",
-        "porte": "MICRO EMPRESA",
+        "porte": "Microempresa (ME)",
         "opencnpj": {
-            "porte_empresa": "MICRO EMPRESA",
+            "porte_empresa": "Microempresa (ME)",
             "municipio": "AMONTADA",
             "uf": "CE",
             "cnae_principal": "4711302",
@@ -74,9 +76,9 @@ FORNECEDORES = [
     {
         "cnpj": "98765432000111",
         "razao_social": "Fornecedor Fortaleza SA",
-        "porte": "EMPRESA DE PEQUENO PORTE",
+        "porte": "Empresa de Pequeno Porte (EPP)",
         "opencnpj": {
-            "porte_empresa": "EMPRESA DE PEQUENO PORTE",
+            "porte_empresa": "Empresa de Pequeno Porte (EPP)",
             "municipio": "FORTALEZA",
             "uf": "CE",
             "cnae_principal": "6201501",
@@ -248,6 +250,61 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
         self.assertEqual(linha_me["quantidade_empenhos"], 1)
         self.assertEqual(linha_me["valor_porte"], 8_000.0)
         self.assertNotIn("total_contratos", linha_me)
+
+    @patch("app.pipeline.analisys.montar_base_analitica_tce")
+    def test_overview_preserva_metadados_e_aplica_escopo_me_mei(
+        self,
+        montar_base,
+    ) -> None:
+        montar_base.return_value = (
+            pd.DataFrame(
+                [
+                    {
+                        "ano_mes": "2025-01",
+                        "valor": 80.0,
+                        "porte_fornecedor": "ME",
+                        "origem_geografica": "Sediado no município comprador",
+                    },
+                    {
+                        "ano_mes": "2025-01",
+                        "valor": 20.0,
+                        "porte_fornecedor": "MEI",
+                        "origem_geografica": "Outro município do Ceará",
+                    },
+                ]
+            ),
+            {
+                "fonte": "TCE-CE",
+                "competencias_publicadas": ["2025-01"],
+                "competencias_ausentes": [],
+            },
+        )
+
+        resultado = analisys.consultar_overview_tce(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio="010",
+            throttle_fornecedores=0,
+        )
+
+        montar_base.assert_called_once_with(
+            "2025-01-01",
+            "2025-01-31",
+            codigo_municipio="010",
+            throttle_fornecedores=0,
+        )
+        self.assertEqual(resultado["competencias_publicadas"], ["2025-01"])
+        self.assertEqual(resultado["escopo"]["portes_considerados"], ["ME", "MEI"])
+        self.assertEqual(
+            resultado["escopo"]["portes_no_denominador_participacao"],
+            ["ME", "MEI", "EPP", "DEMAIS"],
+        )
+        self.assertEqual(resultado["unidade_monetaria"], "CENTAVOS")
+        self.assertEqual(resultado["kpis"]["percentual_participacao_me"], 100.0)
+        self.assertEqual(
+            resultado["kpis"]["total_compras_consideradas_centavos"],
+            10_000,
+        )
 
 
 if __name__ == "__main__":
