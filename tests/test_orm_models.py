@@ -29,7 +29,9 @@ class OrmMetadataTest(unittest.TestCase):
     def test_main_metadata_registra_tabelas_do_banco_principal(self) -> None:
         esperado = {
             "ibge_municipios",
+            "tce_municipios",
             "fornecedores_me",
+            "fornecedores_cache",
             "tce_despesa_ingestion_runs",
             "tce_empenhos",
             "tce_anulacoes_empenhos",
@@ -56,6 +58,11 @@ class OrmMetadataTest(unittest.TestCase):
         self.assertEqual(anulacao.c.valor_anulacao_centavos.type.python_type, int)
         self.assertEqual(next(iter(empenho.c.run_id.foreign_keys)).ondelete, "CASCADE")
         self.assertEqual(next(iter(anulacao.c.run_id.foreign_keys)).ondelete, "CASCADE")
+
+        fornecedores_cache = models.FornecedorCache.__table__
+        self.assertIsInstance(fornecedores_cache.c.dados_normalizados.type, JSONB)
+        self.assertIsInstance(fornecedores_cache.c.payload.type, JSONB)
+        self.assertTrue(fornecedores_cache.c.expira_em.type.timezone)
 
     def test_log_metadata_registra_apenas_tabela_de_logs(self) -> None:
         self.assertEqual(set(orm.LogBase.metadata.tables), {"logs_ingestao"})

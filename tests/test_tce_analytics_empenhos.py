@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import os
 from pathlib import Path
@@ -20,6 +21,7 @@ os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 
 from app.pipeline import analisys
+from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 
 
 def _publicado():
@@ -86,15 +88,21 @@ FORNECEDORES = [
         "opencnpj_status": "ok",
     },
 ]
+FORNECEDORES_LIMPOS = opencnpj_cleaning.limpar_fornecedores(FORNECEDORES)
 
 
 class BaseAnaliticaEmpenhosTest(unittest.TestCase):
-    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
+    @patch("app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache")
     @patch("app.pipeline.analisys.tce_despesas_persistence.listar_empenhos_liquidos_publicados")
+    @patch(
+        "app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias",
+        return_value={},
+    )
     @patch("app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce")
     def test_coleta_competencias_e_calcula_sobre_valor_liquido(
         self,
         executar_ingestao,
+        listar_publicacoes,
         listar_empenhos,
         coletar_fornecedores,
     ) -> None:
@@ -119,7 +127,7 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
                 "Fornecedor Fortaleza SA",
             ),
         ]
-        coletar_fornecedores.return_value = FORNECEDORES
+        coletar_fornecedores.return_value = FORNECEDORES_LIMPOS
 
         base, metadados = analisys.montar_base_analitica_tce(
             data_inicial="2025-01-15",
@@ -137,6 +145,9 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
             ],
         )
         self.assertEqual(metadados["competencias_ausentes"], [])
+        self.assertEqual(metadados["competencias_atualizadas"], ["2025-01", "2025-02"])
+        self.assertEqual(metadados["competencias_reutilizadas"], [])
+        self.assertEqual(metadados["competencias_desatualizadas"], [])
         self.assertEqual(metadados["base_analitica"]["nome"], "tce_empenhos_liquidos")
         self.assertEqual(metadados["base_analitica"]["base_calculo"], "empenhos_tce")
         self.assertEqual(metadados["totais_brutos"], {"empenhos": 2})
@@ -154,12 +165,20 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
         self.assertIsNotNone(janeiro["observado_em"])
         self.assertEqual(janeiro["origem_geografica"], "Sediado no município comprador")
 
-    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote", return_value=[])
+    @patch(
+        "app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache",
+        return_value=pd.DataFrame(),
+    )
     @patch("app.pipeline.analisys.tce_despesas_persistence.listar_empenhos_liquidos_publicados")
+    @patch(
+        "app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias",
+        return_value={},
+    )
     @patch("app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce")
     def test_falha_parcial_sinaliza_e_exclui_competencia_ausente(
         self,
         executar_ingestao,
+        listar_publicacoes,
         listar_empenhos,
         coletar_fornecedores,
     ) -> None:
@@ -181,11 +200,17 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
         self.assertEqual(metadados["competencias_publicadas"], ["2025-01"])
         self.assertEqual(metadados["competencias_ausentes"], ["2025-02"])
         self.assertEqual(metadados["falhas_competencias"][0]["erro"], "fevereiro indisponível")
+        self.assertFalse(metadados["falhas_competencias"][0]["usou_versao_publicada"])
 
+    @patch(
+        "app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias",
+        return_value={},
+    )
     @patch("app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce")
     def test_falha_em_todas_as_competencias_interrompe_com_erro_503_de_dominio(
         self,
         executar_ingestao,
+        listar_publicacoes,
     ) -> None:
         executar_ingestao.side_effect = RuntimeError("TCE indisponível")
 
@@ -198,30 +223,101 @@ class BaseAnaliticaEmpenhosTest(unittest.TestCase):
             )
 
 
+class AtualizacaoCompetenciasTceTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.agora = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
+
+    def test_politica_a_aplica_ttls_por_idade_da_competencia(self) -> None:
+        self.assertEqual(
+            analisys._ttl_competencia("2026-09", self.agora),
+            timedelta(hours=1),
+        )
+        self.assertEqual(
+            analisys._ttl_competencia("2026-06", self.agora),
+            timedelta(hours=24),
+        )
+        self.assertEqual(
+            analisys._ttl_competencia("2026-05", self.agora),
+            timedelta(days=7),
+        )
+
+    @patch("app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce")
+    @patch("app.pipeline.analisys._agora_utc")
+    @patch("app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias")
+    def test_publicacao_dentro_do_ttl_e_reutilizada_sem_ingestao(
+        self,
+        listar_publicacoes,
+        agora_utc,
+        executar_ingestao,
+    ) -> None:
+        agora_utc.return_value = self.agora
+        listar_publicacoes.return_value = {"2026-09": self.agora - timedelta(minutes=30)}
+
+        resultado = analisys._atualizar_competencias_tce(
+            competencias=["2026-09"],
+            codigo_municipio="010",
+        )
+
+        self.assertEqual(resultado.publicadas, ["2026-09"])
+        self.assertEqual(resultado.reutilizadas, ["2026-09"])
+        self.assertEqual(resultado.atualizadas, [])
+        executar_ingestao.assert_not_called()
+
+    @patch(
+        "app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce",
+        side_effect=RuntimeError("TCE indisponível"),
+    )
+    @patch("app.pipeline.analisys._agora_utc")
+    @patch("app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias")
+    def test_falha_de_atualizacao_reutiliza_publicacao_vencida(
+        self,
+        listar_publicacoes,
+        agora_utc,
+        executar_ingestao,
+    ) -> None:
+        agora_utc.return_value = self.agora
+        listar_publicacoes.return_value = {"2026-09": self.agora - timedelta(hours=2)}
+
+        resultado = analisys._atualizar_competencias_tce(
+            competencias=["2026-09"],
+            codigo_municipio="010",
+        )
+
+        self.assertEqual(resultado.publicadas, ["2026-09"])
+        self.assertEqual(resultado.desatualizadas, ["2026-09"])
+        self.assertEqual(resultado.ausentes, [])
+        self.assertTrue(resultado.falhas[0]["usou_versao_publicada"])
+
+
 class IndicadoresEmpenhosTest(unittest.TestCase):
     def setUp(self) -> None:
         self.base = None
 
     @patch(
-        "app.pipeline.analisys.tce.buscar_municipios",
-        return_value=[{"codigo_municipio": "010", "nome_municipio": "Amontada"}],
+        "app.pipeline.analisys.database.localizar_municipio_tce",
+        return_value={"codigo_municipio_tce": "010", "nome": "Amontada"},
     )
-    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
+    @patch("app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache")
     @patch("app.pipeline.analisys.tce_despesas_persistence.listar_empenhos_liquidos_publicados")
+    @patch(
+        "app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias",
+        return_value={},
+    )
     @patch("app.pipeline.analisys.tce_despesas_pipeline.executar_ingestao_competencia_tce")
     def test_indicadores_e_porte_mensal_usam_empenhos_liquidos(
         self,
         executar_ingestao,
+        listar_publicacoes,
         listar_empenhos,
         coletar_fornecedores,
-        buscar_municipios,
+        localizar_municipio,
     ) -> None:
         executar_ingestao.return_value = _publicado()
         listar_empenhos.return_value = [
             _empenho("E1", "2025-01-10", "30", 1_000_000, 200_000, "11444777000161", "ME"),
             _empenho("E2", "2025-01-20", "39", 2_000_000, 500_000, "98765432000111", "EPP"),
         ]
-        coletar_fornecedores.return_value = FORNECEDORES
+        coletar_fornecedores.return_value = FORNECEDORES_LIMPOS
 
         indicadores = analisys.consultar_tce_indicadores_analiticos(
             data_inicial="2025-01-01",
@@ -250,6 +346,51 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
         self.assertEqual(linha_me["quantidade_empenhos"], 1)
         self.assertEqual(linha_me["valor_porte"], 8_000.0)
         self.assertNotIn("total_contratos", linha_me)
+
+
+class ResolverMunicipioTceTest(unittest.TestCase):
+    @patch("app.pipeline.analisys.tce.buscar_municipios")
+    @patch("app.pipeline.analisys.database.salvar_municipios_tce")
+    @patch(
+        "app.pipeline.analisys.database.localizar_municipio_tce",
+        return_value={"codigo_municipio_tce": "010", "nome": "Amontada"},
+    )
+    def test_resolve_pelo_banco_sem_consultar_tce(
+        self,
+        localizar_municipio,
+        salvar_municipios,
+        buscar_municipios,
+    ) -> None:
+        nome = analisys._resolver_nome_municipio_tce("010")
+
+        self.assertEqual(nome, "Amontada")
+        localizar_municipio.assert_called_once_with("010")
+        buscar_municipios.assert_not_called()
+        salvar_municipios.assert_not_called()
+
+    @patch("app.pipeline.analisys.database.salvar_municipios_tce")
+    @patch(
+        "app.pipeline.analisys.tce.buscar_municipios",
+        return_value=[
+            {
+                "codigo_municipio": "010",
+                "codigo_municipio_ibge": "2300754",
+                "nome_municipio": "Amontada",
+            }
+        ],
+    )
+    @patch("app.pipeline.analisys.database.localizar_municipio_tce", return_value=None)
+    def test_cache_miss_consulta_tce_e_persiste_lista(
+        self,
+        localizar_municipio,
+        buscar_municipios,
+        salvar_municipios,
+    ) -> None:
+        nome = analisys._resolver_nome_municipio_tce("010")
+
+        self.assertEqual(nome, "Amontada")
+        buscar_municipios.assert_called_once_with()
+        salvar_municipios.assert_called_once_with(buscar_municipios.return_value, "CE")
 
     @patch("app.pipeline.analisys.montar_base_analitica_tce")
     def test_overview_preserva_metadados_e_aplica_escopo_me_mei(

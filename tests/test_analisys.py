@@ -50,7 +50,7 @@ class SerializacaoJsonTest(unittest.TestCase):
 
 
 class ConsultarTceContratosTest(unittest.TestCase):
-    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
+    @patch("app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache")
     @patch("app.pipeline.analisys.tce.buscar_contratados")
     @patch("app.pipeline.analisys.tce.buscar_contratos")
     def test_junta_contratados_enriquece_fornecedor_e_serializa(self, buscar_contratos, buscar_contratados, coletar) -> None:
@@ -71,14 +71,14 @@ class ConsultarTceContratosTest(unittest.TestCase):
                 "nome_negociante": "Comercio Exemplo LTDA",
             }
         ]
-        coletar.return_value = [
-            {
+        coletar.return_value = pd.DataFrame(
+            [{
                 "cnpj": "11444777000161",
-                "opencnpj": {"cnpj": "11444777000161", "porte_empresa": "MICRO EMPRESA"},
-                "porte": "MICRO EMPRESA",
+                "porte_padronizado": "ME",
+                "elegivel_me": True,
                 "opencnpj_status": "ok",
-            }
-        ]
+            }]
+        )
 
         resposta = analisys.consultar_tce_contratos(
             data_inicial="2025-01-01",

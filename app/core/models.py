@@ -30,6 +30,13 @@ class IbgeMunicipio(MainBase):
     uf: Mapped[str] = mapped_column(Text)
 
 
+class TceMunicipio(MainBase):
+    __tablename__ = "tce_municipios"
+
+    codigo_municipio_tce: Mapped[str] = mapped_column(Text, primary_key=True)
+    codigo_municipio_ibge: Mapped[str] = mapped_column(Text, unique=True)
+
+
 class FornecedorMe(MainBase):
     __tablename__ = "fornecedores_me"
     __table_args__ = (
@@ -39,6 +46,40 @@ class FornecedorMe(MainBase):
     cnpj: Mapped[str] = mapped_column(Text, primary_key=True)
     razao_social: Mapped[str | None] = mapped_column(Text)
     porte: Mapped[str] = mapped_column(Text)
+
+
+class FornecedorCache(MainBase):
+    __tablename__ = "fornecedores_cache"
+    __table_args__ = (
+        CheckConstraint(
+            "opencnpj_status IN ('ok', 'nao_encontrado', 'indisponivel')",
+            name="ck_fornecedores_cache_status",
+        ),
+        CheckConstraint(
+            "ultima_tentativa_status IN ('ok', 'nao_encontrado', 'indisponivel')",
+            name="ck_fornecedores_cache_ultima_tentativa_status",
+        ),
+    )
+
+    cnpj: Mapped[str] = mapped_column(Text, primary_key=True)
+    opencnpj_status: Mapped[str] = mapped_column(Text)
+    dados_normalizados: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        server_default=text("'{}'::jsonb"),
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        server_default=text("'{}'::jsonb"),
+    )
+    observado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ultima_tentativa_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ultima_tentativa_status: Mapped[str] = mapped_column(Text)
+    cache_desatualizado: Mapped[bool] = mapped_column(Boolean, default=False)
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+    )
 
 
 class TceDespesaIngestionRun(MainBase):
@@ -169,6 +210,7 @@ class TceAnulacaoEmpenho(MainBase):
 
 
 Index("idx_ibge_municipios_uf_nome", IbgeMunicipio.uf, IbgeMunicipio.nome)
+Index("idx_fornecedores_cache_expira_em", FornecedorCache.expira_em)
 Index(
     "uq_tce_despesa_run_publicado_competencia",
     TceDespesaIngestionRun.codigo_municipio_tce,
@@ -194,9 +236,11 @@ Index("idx_tce_anulacoes_chave_empenho", TceAnulacaoEmpenho.chave_empenho)
 
 
 __all__ = [
+    "FornecedorCache",
     "FornecedorMe",
     "IbgeMunicipio",
     "TceAnulacaoEmpenho",
     "TceDespesaIngestionRun",
     "TceEmpenho",
+    "TceMunicipio",
 ]

@@ -309,6 +309,31 @@ def remover_lotes_expirados(*, agora: datetime | None = None) -> int:
         return _remover_lotes_expirados_session(session, instante)
 
 
+def listar_publicacoes_competencias(
+    *,
+    codigo_municipio_tce: str,
+    competencias: Iterable[str],
+) -> dict[str, datetime | None]:
+    """Retorna o instante da publicacao ativa de cada competencia solicitada."""
+    competencias_unicas = tuple(dict.fromkeys(str(item) for item in competencias))
+    if not competencias_unicas:
+        return {}
+
+    database.init_db()
+    consulta = select(
+        TceDespesaIngestionRun.competencia,
+        TceDespesaIngestionRun.publicado_em,
+    ).where(
+        TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce,
+        TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+        TceDespesaIngestionRun.competencia.in_(competencias_unicas),
+    )
+    with orm.main_session() as session:
+        registros = session.execute(consulta).all()
+
+    return {str(competencia): publicado_em for competencia, publicado_em in registros}
+
+
 def listar_empenhos_liquidos_publicados(
     *,
     codigo_municipio_tce: str,
@@ -523,6 +548,7 @@ __all__ = [
     "LoteTceValidado",
     "ResultadoPublicacaoTce",
     "listar_empenhos_liquidos_publicados",
+    "listar_publicacoes_competencias",
     "publicar_lote_tce",
     "registrar_lote_rejeitado",
     "remover_lotes_expirados",
