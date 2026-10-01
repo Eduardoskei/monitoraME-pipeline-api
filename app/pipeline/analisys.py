@@ -1,10 +1,11 @@
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 import pandas as pd
+from app.core import database
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
 from app.pipeline import analitico, kpis, merge
 from app.pipeline import tce_despesas as tce_despesas_pipeline
-from app.pipeline.cleaners import opencnpj as opencnpj_cleaning
 from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.enrichment.fornecedores import enriquecer_com_fornecedor, extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, tce
@@ -12,7 +13,22 @@ from app.pipeline.persistence import tce_despesas as tce_despesas_persistence
 
 
 class CompetenciasTceIndisponiveisError(RuntimeError):
-    """Nenhuma competência solicitada pôde ser atualizada antes do cálculo."""
+    """Nenhuma competência solicitada possui uma publicação utilizável."""
+
+
+TTL_COMPETENCIA_MES_ATUAL = timedelta(hours=1)
+TTL_COMPETENCIA_TRES_MESES_ANTERIORES = timedelta(hours=24)
+TTL_COMPETENCIA_HISTORICA = timedelta(days=7)
+
+
+@dataclass(frozen=True)
+class ResultadoAtualizacaoCompetenciasTce:
+    publicadas: list[str]
+    atualizadas: list[str]
+    reutilizadas: list[str]
+    desatualizadas: list[str]
+    ausentes: list[str]
+    falhas: list[dict[str, Any]]
 
 
 def valor_json(valor: Any) -> Any:
@@ -99,7 +115,12 @@ def _ordenar_tce_contratos_por_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _resolver_nome_municipio_tce(codigo_municipio: str) -> str:
+    municipio_salvo = database.localizar_municipio_tce(codigo_municipio)
+    if municipio_salvo is not None:
+        return municipio_salvo["nome"]
+
     municipios = tce.buscar_municipios()
+    database.salvar_municipios_tce(municipios, UF_PADRAO)
     codigo_procurado = str(codigo_municipio).strip()
 
     for municipio in municipios:
@@ -120,8 +141,10 @@ def _coletar_fornecedores(cnpjs: list[str], throttle_segundos: float) -> pd.Data
     if not cnpjs:
         return None
 
-    registros = fornecedores.coletar_fornecedores_em_lote(cnpjs, throttle_segundos=throttle_segundos)
-    return opencnpj_cleaning.limpar_fornecedores(registros)
+    return fornecedores.obter_fornecedores_com_cache(
+        cnpjs,
+        throttle_segundos=throttle_segundos,
+    )
 
 
 def _competencias_entre_datas(data_inicial: str, data_final: str) -> list[str]:
@@ -144,44 +167,110 @@ def _competencias_entre_datas(data_inicial: str, data_final: str) -> list[str]:
     return competencias
 
 
+def _agora_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ttl_competencia(competencia: str, agora: datetime) -> timedelta:
+    ano, mes = (int(parte) for parte in competencia.split("-", maxsplit=1))
+    distancia_meses = (agora.year - ano) * 12 + agora.month - mes
+    if distancia_meses == 0:
+        return TTL_COMPETENCIA_MES_ATUAL
+    if 1 <= distancia_meses <= 3:
+        return TTL_COMPETENCIA_TRES_MESES_ANTERIORES
+    return TTL_COMPETENCIA_HISTORICA
+
+
+def _publicacao_atualizada(
+    competencia: str,
+    publicado_em: datetime | None,
+    agora: datetime,
+) -> bool:
+    if publicado_em is None:
+        return False
+    instante_publicacao = (
+        publicado_em.replace(tzinfo=timezone.utc)
+        if publicado_em.tzinfo is None
+        else publicado_em.astimezone(timezone.utc)
+    )
+    return instante_publicacao >= agora - _ttl_competencia(competencia, agora)
+
+
 def _atualizar_competencias_tce(
     *,
     competencias: list[str],
     codigo_municipio: str,
-) -> tuple[list[str], list[dict[str, str]]]:
+) -> ResultadoAtualizacaoCompetenciasTce:
+    agora = _agora_utc()
+    publicacoes_existentes = tce_despesas_persistence.listar_publicacoes_competencias(
+        codigo_municipio_tce=codigo_municipio,
+        competencias=competencias,
+    )
     publicadas: list[str] = []
-    falhas: list[dict[str, str]] = []
+    atualizadas: list[str] = []
+    reutilizadas: list[str] = []
+    desatualizadas: list[str] = []
+    ausentes: list[str] = []
+    falhas: list[dict[str, Any]] = []
     for competencia in competencias:
+        possui_publicacao = competencia in publicacoes_existentes
+        if possui_publicacao and _publicacao_atualizada(
+            competencia,
+            publicacoes_existentes[competencia],
+            agora,
+        ):
+            publicadas.append(competencia)
+            reutilizadas.append(competencia)
+            continue
+
+        erro_atualizacao: str | None = None
         try:
             resultado = tce_despesas_pipeline.executar_ingestao_competencia_tce(
                 competencia,
                 codigo_municipio_tce=codigo_municipio,
             )
         except Exception as error:
-            falhas.append({"competencia": competencia, "erro": str(error)})
-            continue
+            erro_atualizacao = str(error)
+        else:
+            if resultado.status != tce_despesas_persistence.STATUS_PUBLICADO:
+                codigos = ", ".join(
+                    str(problema.get("codigo", "ERRO_VALIDACAO"))
+                    for problema in resultado.problemas
+                )
+                erro_atualizacao = codigos or f"Lote finalizado com status {resultado.status}."
 
-        if resultado.status == tce_despesas_persistence.STATUS_PUBLICADO:
+        if erro_atualizacao is None:
             publicadas.append(competencia)
+            atualizadas.append(competencia)
             continue
 
-        codigos = ", ".join(
-            str(problema.get("codigo", "ERRO_VALIDACAO"))
-            for problema in resultado.problemas
-        )
+        usou_versao_publicada = possui_publicacao
         falhas.append(
             {
                 "competencia": competencia,
-                "erro": codigos or f"Lote finalizado com status {resultado.status}.",
+                "erro": erro_atualizacao,
+                "usou_versao_publicada": usou_versao_publicada,
             }
         )
+        if usou_versao_publicada:
+            publicadas.append(competencia)
+            desatualizadas.append(competencia)
+        else:
+            ausentes.append(competencia)
 
     if not publicadas:
         meses = ", ".join(competencias)
         raise CompetenciasTceIndisponiveisError(
-            f"Nenhuma competência do TCE-CE pôde ser atualizada: {meses}."
+            f"Nenhuma competência do TCE-CE possui publicação utilizável: {meses}."
         )
-    return publicadas, falhas
+    return ResultadoAtualizacaoCompetenciasTce(
+        publicadas=publicadas,
+        atualizadas=atualizadas,
+        reutilizadas=reutilizadas,
+        desatualizadas=desatualizadas,
+        ausentes=ausentes,
+        falhas=falhas,
+    )
 
 
 def montar_base_tce_contratos(
@@ -248,7 +337,7 @@ def montar_base_analitica_tce(
     throttle_fornecedores: float = 0.3,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     competencias = _competencias_entre_datas(data_inicial, data_final)
-    competencias_publicadas, falhas_competencias = _atualizar_competencias_tce(
+    atualizacao = _atualizar_competencias_tce(
         competencias=competencias,
         codigo_municipio=codigo_municipio,
     )
@@ -257,7 +346,7 @@ def montar_base_analitica_tce(
         data_inicial=date.fromisoformat(data_inicial),
         data_final=date.fromisoformat(data_final),
     )
-    competencias_validas = set(competencias_publicadas)
+    competencias_validas = set(atualizacao.publicadas)
     empenhos = [
         empenho
         for empenho in empenhos
@@ -291,9 +380,20 @@ def montar_base_analitica_tce(
             "codigo_municipio": codigo_municipio,
         },
         "competencias_solicitadas": competencias,
-        "competencias_publicadas": competencias_publicadas,
-        "competencias_ausentes": [falha["competencia"] for falha in falhas_competencias],
-        "falhas_competencias": falhas_competencias,
+        "competencias_publicadas": atualizacao.publicadas,
+        "competencias_atualizadas": atualizacao.atualizadas,
+        "competencias_reutilizadas": atualizacao.reutilizadas,
+        "competencias_desatualizadas": atualizacao.desatualizadas,
+        "competencias_ausentes": atualizacao.ausentes,
+        "falhas_competencias": atualizacao.falhas,
+        "politica_atualizacao": {
+            "ttl_mes_atual_segundos": int(TTL_COMPETENCIA_MES_ATUAL.total_seconds()),
+            "ttl_tres_meses_anteriores_segundos": int(
+                TTL_COMPETENCIA_TRES_MESES_ANTERIORES.total_seconds()
+            ),
+            "ttl_historico_segundos": int(TTL_COMPETENCIA_HISTORICA.total_seconds()),
+            "usar_publicacao_anterior_em_falha": True,
+        },
         "totais_brutos": {"empenhos": len(empenhos)},
         "base_analitica": {
             "nome": "tce_empenhos_liquidos",

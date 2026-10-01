@@ -93,6 +93,13 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
 
+Competências publicadas são reutilizadas enquanto estiverem dentro da política
+de atualização: uma hora para o mês atual, 24 horas para os três meses
+anteriores e sete dias para os meses mais antigos. Quando uma publicação
+vencida não pode ser atualizada, sua última versão continua no cálculo e a
+competência aparece em `competencias_desatualizadas`. Competências sem qualquer
+publicação continuam aparecendo em `competencias_ausentes`.
+
 ### Overview de ME e MEI
 
 `GET /pipeline/tce/overview` recebe `data_inicial`, `data_final` e
@@ -127,10 +134,23 @@ KPIs zerados, evolução vazia e os quatro destinos com valor e percentual zero.
 
 O banco principal mantém:
 
-- `ibge_municipios` e `fornecedores_me`, usados como caches;
+- `ibge_municipios`, `tce_municipios`, `fornecedores_me` e
+  `fornecedores_cache`, usados como caches;
 - `tce_despesa_ingestion_runs`, com o estado de cada carga mensal;
 - `tce_empenhos`, com as notas de empenho versionadas por lote;
 - `tce_anulacoes_empenhos`, com as anulações vinculadas aos empenhos.
+
+A resolução do código interno de município do TCE consulta primeiro
+`tce_municipios`, associada a `ibge_municipios`. Quando o código ainda não
+existe no cache, a aplicação consulta a lista do TCE uma vez e persiste os
+mapeamentos em lote para as consultas seguintes.
+
+O cache cadastral completo de fornecedores mantém os dados normalizados e o
+payload bruto do OpenCNPJ. Registros encontrados valem por 30 dias, respostas
+`nao_encontrado` por sete dias e indisponibilidades por uma hora. A consulta ao
+OpenCNPJ ocorre apenas para CNPJs ausentes ou vencidos. Se a renovação falhar,
+o último dado conhecido é preservado e devolvido com
+`cache_desatualizado=true` até uma nova tentativa.
 
 O banco de logs mantém `logs_ingestao`. Os dois bancos usam ambientes Alembic independentes.
 

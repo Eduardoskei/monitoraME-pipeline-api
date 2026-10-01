@@ -300,6 +300,45 @@ class PublicacaoLoteTceTest(unittest.TestCase):
 
 
 class LeituraAnaliticaTceTest(unittest.TestCase):
+    def test_lista_instantes_das_competencias_publicadas(self) -> None:
+        publicado_em = datetime(2026, 9, 30, 10, 0, tzinfo=timezone.utc)
+
+        class Resultado:
+            def all(self):
+                return [("2026-09", publicado_em)]
+
+        class Sessao:
+            comando = None
+
+            def execute(self, comando):
+                self.comando = comando
+                return Resultado()
+
+        sessao = Sessao()
+
+        @contextmanager
+        def contexto():
+            yield sessao
+
+        with (
+            patch("app.pipeline.persistence.tce_despesas.database.init_db"),
+            patch("app.pipeline.persistence.tce_despesas.orm.main_session", side_effect=contexto),
+        ):
+            resultado = tce_despesas.listar_publicacoes_competencias(
+                codigo_municipio_tce="010",
+                competencias=["2026-09", "2026-09"],
+            )
+
+        sql = str(
+            sessao.comando.compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+        self.assertEqual(resultado, {"2026-09": publicado_em})
+        self.assertIn("status = 'PUBLICADO'", sql)
+        self.assertIn("competencia IN ('2026-09')", sql)
+
     def test_le_empenho_publicado_e_desconta_anulacoes_de_qualquer_competencia(self) -> None:
         registro = {
             "chave_empenho": CHAVE_EMPENHO,

@@ -133,6 +133,26 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_adiciona_cache_completo_de_fornecedores(self) -> None:
+        migration = (
+            ROOT
+            / "alembic"
+            / "main"
+            / "versions"
+            / "0005_fornecedores_cache.py"
+        )
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.revision, "0005_fornecedores_cache")
+        self.assertEqual(modulo.down_revision, "0004_tce_municipios")
+        self.assertIn('"fornecedores_cache"', texto)
+        self.assertIn('"dados_normalizados"', texto)
+        self.assertIn('"payload"', texto)
+        self.assertIn('"expira_em"', texto)
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
 
 if __name__ == "__main__":
     unittest.main()

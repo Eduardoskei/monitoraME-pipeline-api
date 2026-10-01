@@ -18,6 +18,7 @@ os.environ.setdefault("UF_PADRAO", "CE")
 os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 
 from fastapi import HTTPException
+import pandas as pd
 
 from app import main
 from app.pipeline import analisys
@@ -86,7 +87,7 @@ class MainTest(unittest.TestCase):
 
     @patch("app.main.database.close_pool")
     @patch("app.main.database.init_db")
-    @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
+    @patch("app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache")
     @patch("app.pipeline.analisys.tce.buscar_contratados")
     @patch("app.pipeline.analisys.tce.buscar_contratos")
     def test_endpoint_tce_contratos_retorna_fluxo_serializado(
@@ -113,15 +114,14 @@ class MainTest(unittest.TestCase):
                 "nome_negociante": "Fornecedor Teste",
             }
         ]
-        coletar_fornecedores.return_value = [
-            {
+        coletar_fornecedores.return_value = pd.DataFrame(
+            [{
                 "cnpj": "11444777000161",
                 "razao_social": "Fornecedor Teste",
-                "opencnpj": {"porte_empresa": "MICRO EMPRESA"},
-                "porte": "MICRO EMPRESA",
+                "porte_padronizado": "ME",
                 "opencnpj_status": "ok",
-            }
-        ]
+            }]
+        )
 
         payload = main.tce_contratos(
             data_inicial="2025-01-01",
