@@ -1,9 +1,13 @@
 from datetime import datetime
+import logging
 import re
 from typing import Any, Iterable
 import unicodedata
 
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 VALORES_VAZIOS = (None, "")
@@ -424,7 +428,14 @@ def remover_duplicatas(df: pd.DataFrame, subset: Iterable[str] | None = None) ->
     df = df.drop_duplicates(subset=list(subset) if subset else None, keep="first").reset_index(drop=True)
     removidos = antes - len(df)
     if removidos:
-        print(f"[cleaners] {removidos} registro(s) duplicado(s) removido(s).")
+        logger.info(
+            "Registros duplicados removidos",
+            extra={
+                "removed_count": removidos,
+                "input_count": antes,
+                "output_count": len(df),
+            },
+        )
     return df
 
 

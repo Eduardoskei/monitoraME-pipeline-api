@@ -60,6 +60,7 @@ Variáveis usadas pela aplicação:
 | --- | --- | --- |
 | `DATABASE_URL` | Sim | Banco principal com caches e lotes analíticos. |
 | `LOG_DATABASE_URL` | Sim | Banco da tabela `logs_ingestao`. |
+| `LOG_LEVEL` | Não | Nível dos logs operacionais (`DEBUG`, `INFO`, `WARNING`, `ERROR`); padrão `INFO`. |
 | `DATABASE_SSLMODE` | Não | Modo SSL do banco principal; padrão `require`. |
 | `LOG_DATABASE_SSLMODE` | Não | Modo SSL do banco de logs. |
 | `TCE_CE_BASE_URL` | Sim | API de dados abertos do TCE-CE. |
@@ -152,7 +153,22 @@ OpenCNPJ ocorre apenas para CNPJs ausentes ou vencidos. Se a renovação falhar,
 o último dado conhecido é preservado e devolvido com
 `cache_desatualizado=true` até uma nova tentativa.
 
-O banco de logs mantém `logs_ingestao`. Os dois bancos usam ambientes Alembic independentes.
+O banco de logs mantém `logs_ingestao`, para auditoria das coletas, e
+`logs_aplicacao`, para alertas operacionais. Os dois bancos usam ambientes
+Alembic independentes.
+
+## Observabilidade
+
+A aplicação escreve logs operacionais estruturados em JSON na saída padrão. Cada
+registro contém `level`, `logger`, `message` e apenas o contexto
+pertinente, como duração, contagens, fonte e etapa. Segredos conhecidos são
+removidos dos campos estruturados e payloads das fontes externas não são registrados.
+
+As execuções de ingestão do TCE-CE continuam sendo auditadas no banco separado em
+`logs_ingestao`; uma falha nesse banco gera um alerta operacional, mas não interrompe
+o pipeline principal. Logs `WARNING`, `ERROR` e `CRITICAL` são persistidos em
+`logs_aplicacao`; registros `INFO` permanecem apenas na saída padrão para evitar
+volume desnecessário no PostgreSQL.
 
 A migration `0003_remove_pncp` exclui as antigas tabelas do módulo de oportunidades. A aplicação dessa migration remove definitivamente os dados existentes nessas tabelas.
 

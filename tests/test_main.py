@@ -46,13 +46,18 @@ class MainTest(unittest.TestCase):
                 patch("app.main.database.close_pool") as close_pool,
                 patch("app.main.log_database.init_log_db") as init_log_db,
                 patch("app.main.log_database.close_log_pool") as close_log_pool,
+                patch("app.main.habilitar_persistencia_logs") as habilitar_logs,
+                patch("app.main.desabilitar_persistencia_logs") as desabilitar_logs,
             ):
                 async with main.lifespan(main.app):
                     init_db.assert_called_once_with()
                     init_log_db.assert_called_once_with()
+                    habilitar_logs.assert_called_once_with()
+                    desabilitar_logs.assert_not_called()
                     close_pool.assert_not_called()
                     close_log_pool.assert_not_called()
 
+                desabilitar_logs.assert_called_once_with()
                 close_pool.assert_called_once_with()
                 close_log_pool.assert_called_once_with()
 

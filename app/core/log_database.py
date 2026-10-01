@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core import orm
-from app.core.log_models import LogIngestao
+from app.core.log_models import LogAplicacao, LogIngestao
 
 
 _log_schema_initialized = False
@@ -21,6 +21,12 @@ def _datetime_utc(valor: datetime) -> datetime:
     if valor.tzinfo is None:
         return valor.replace(tzinfo=timezone.utc)
     return valor.astimezone(timezone.utc)
+
+
+def _texto_limitado(valor: str, limite: int) -> str:
+    if len(valor) <= limite:
+        return valor
+    return f"{valor[:limite]}... [truncado]"
 
 
 def close_log_pool() -> None:
@@ -73,8 +79,36 @@ def registrar_log_ingestao(
         )
 
 
+def registrar_log_aplicacao(
+    *,
+    nivel: str,
+    logger_nome: str,
+    mensagem: str,
+    contexto: dict[str, Any] | None = None,
+    excecao: str | None = None,
+    criado_em: datetime | None = None,
+) -> None:
+    nivel_normalizado = str(nivel).strip().upper()
+    if nivel_normalizado not in {"WARNING", "ERROR", "CRITICAL"}:
+        raise ValueError("nivel deve ser WARNING, ERROR ou CRITICAL.")
+    init_log_db()
+
+    with orm.log_session() as session:
+        session.add(
+            LogAplicacao(
+                nivel=nivel_normalizado,
+                logger=_texto_limitado(str(logger_nome), 255),
+                mensagem=_texto_limitado(str(mensagem), 4_000),
+                contexto=_json_payload(contexto),
+                excecao=_texto_limitado(excecao, 20_000) if excecao is not None else None,
+                criado_em=_datetime_utc(criado_em or datetime.now(timezone.utc)),
+            )
+        )
+
+
 __all__ = [
     "close_log_pool",
     "init_log_db",
+    "registrar_log_aplicacao",
     "registrar_log_ingestao",
 ]

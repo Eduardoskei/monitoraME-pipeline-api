@@ -10,6 +10,30 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.orm import LogBase
 
 
+class LogAplicacao(LogBase):
+    __tablename__ = "logs_aplicacao"
+    __table_args__ = (
+        CheckConstraint(
+            "nivel IN ('WARNING', 'ERROR', 'CRITICAL')",
+            name="ck_logs_aplicacao_nivel",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    nivel: Mapped[str] = mapped_column(Text)
+    logger: Mapped[str] = mapped_column(Text)
+    mensagem: Mapped[str] = mapped_column(Text)
+    contexto: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        server_default=text("'{}'::jsonb"),
+    )
+    excecao: Mapped[str | None] = mapped_column(Text)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=text("now()"),
+    )
+
+
 class LogIngestao(LogBase):
     __tablename__ = "logs_ingestao"
     __table_args__ = (
@@ -43,6 +67,7 @@ class LogIngestao(LogBase):
 
 Index("idx_logs_ingestao_fonte_inicio", LogIngestao.fonte, LogIngestao.data_inicio.desc())
 Index("idx_logs_ingestao_etapa_status", LogIngestao.etapa, LogIngestao.status)
+Index("idx_logs_aplicacao_nivel_criado", LogAplicacao.nivel, LogAplicacao.criado_em.desc())
 
 
-__all__ = ["LogIngestao"]
+__all__ = ["LogAplicacao", "LogIngestao"]
