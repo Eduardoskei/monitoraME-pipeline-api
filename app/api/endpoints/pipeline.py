@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO
@@ -6,6 +7,9 @@ from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
 from app.utils import DATA_ISO_FORMATO, normalizar_data_iso
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -37,6 +41,13 @@ def _validar_periodo_api(data_inicial: str, data_final: str) -> None:
 
 def _erro_pipeline(error: Exception) -> HTTPException:
     if isinstance(error, (ValueError, TypeError, DadosInsuficientesKPI)):
+        logger.info(
+            "Pipeline rejeitou os parâmetros ou os dados disponíveis",
+            extra={
+                "error_type": type(error).__name__,
+                "error": str(error),
+            },
+        )
         return HTTPException(status_code=422, detail=str(error))
     if isinstance(
         error,
@@ -46,7 +57,20 @@ def _erro_pipeline(error: Exception) -> HTTPException:
             tce.TceIndisponivelError,
         ),
     ):
+        logger.warning(
+            "Pipeline indisponível por falha em dependência",
+            extra={
+                "error_type": type(error).__name__,
+                "error": str(error),
+            },
+        )
         return HTTPException(status_code=503, detail=str(error))
+    logger.exception(
+        "Falha inesperada ao executar o pipeline",
+        extra={
+            "error_type": type(error).__name__,
+        },
+    )
     return HTTPException(status_code=500, detail="Falha inesperada ao executar o pipeline.")
 
 

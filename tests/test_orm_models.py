@@ -65,12 +65,20 @@ class OrmMetadataTest(unittest.TestCase):
         self.assertTrue(fornecedores_cache.c.expira_em.type.timezone)
 
     def test_log_metadata_registra_apenas_tabela_de_logs(self) -> None:
-        self.assertEqual(set(orm.LogBase.metadata.tables), {"logs_ingestao"})
+        self.assertEqual(
+            set(orm.LogBase.metadata.tables),
+            {"logs_aplicacao", "logs_ingestao"},
+        )
 
         tabela = log_models.LogIngestao.__table__
         self.assertIsInstance(tabela.c.parametros.type, JSONB)
         self.assertFalse(tabela.c.registros_processados.nullable)
         self.assertTrue(tabela.c.data_inicio.type.timezone)
+
+        tabela_aplicacao = log_models.LogAplicacao.__table__
+        self.assertIsInstance(tabela_aplicacao.c.contexto.type, JSONB)
+        self.assertFalse(tabela_aplicacao.c.nivel.nullable)
+        self.assertTrue(tabela_aplicacao.c.criado_em.type.timezone)
 
 
 class OrmEngineFactoryTest(unittest.TestCase):

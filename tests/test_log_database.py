@@ -20,7 +20,7 @@ os.environ.setdefault("CODIGO_MUNICIPIO_TCE_PADRAO", "010")
 
 from app.core import log_database
 from app.core import orm
-from app.core.log_models import LogIngestao
+from app.core.log_models import LogAplicacao, LogIngestao
 
 
 class FakeConnection:
@@ -138,6 +138,40 @@ class LogDatabaseTest(unittest.TestCase):
         self.assertEqual(registro.falhas_ocorridas, 0)
         self.assertEqual(registro.parametros, {"quando": "2026-08-27 10:00:00"})
         self.assertEqual(registro.totais, {})
+
+    def test_registrar_log_aplicacao_persiste_alerta_com_contexto(self) -> None:
+        session = MagicMock()
+        criado_em = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
+        log_database._log_schema_initialized = True
+
+        with patch("app.core.log_database.orm.log_session", return_value=fake_log_session(session)):
+            log_database.registrar_log_aplicacao(
+                nivel="error",
+                logger_nome="app.pipeline.ingestion.tce",
+                mensagem="Tentativas esgotadas",
+                contexto={"source": "TCE-CE", "attempts": 4},
+                excecao="TimeoutError: timeout",
+                criado_em=criado_em,
+            )
+
+        registro = session.add.call_args.args[0]
+        self.assertIsInstance(registro, LogAplicacao)
+        self.assertEqual(registro.nivel, "ERROR")
+        self.assertEqual(registro.logger, "app.pipeline.ingestion.tce")
+        self.assertEqual(registro.mensagem, "Tentativas esgotadas")
+        self.assertEqual(registro.contexto, {"source": "TCE-CE", "attempts": 4})
+        self.assertEqual(registro.excecao, "TimeoutError: timeout")
+        self.assertEqual(registro.criado_em, criado_em)
+
+    def test_registrar_log_aplicacao_rejeita_nivel_informativo(self) -> None:
+        log_database._log_schema_initialized = True
+
+        with self.assertRaisesRegex(ValueError, "WARNING, ERROR ou CRITICAL"):
+            log_database.registrar_log_aplicacao(
+                nivel="INFO",
+                logger_nome="app.test",
+                mensagem="Nao deve persistir",
+            )
 
 
 if __name__ == "__main__":

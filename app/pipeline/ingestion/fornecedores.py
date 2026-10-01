@@ -1,5 +1,7 @@
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 from typing import Any, Iterable
 import time
 
@@ -21,6 +23,7 @@ OPENCNPJ_DATASET_RECEITA = "receita"
 TTL_CACHE_FORNECEDOR_ENCONTRADO = timedelta(days=30)
 TTL_CACHE_FORNECEDOR_NAO_ENCONTRADO = timedelta(days=7)
 TTL_CACHE_FONTE_INDISPONIVEL = timedelta(hours=1)
+logger = logging.getLogger(__name__)
 
 
 class FonteCadastralIndisponivelError(RuntimeError):
@@ -77,9 +80,21 @@ def _salvar_fornecedor_me_no_banco(fornecedor: dict[str, Any]) -> None:
     except RuntimeError as error:
         if _ignorar_banco_indisponivel(error):
             return
-        print(f"Falha ao salvar fornecedor ME no Postgres: {error}")
+        logger.warning(
+            "Falha ao salvar fornecedor ME no cache",
+            extra={
+                "source": "OpenCNPJ",
+                "error_type": type(error).__name__,
+            },
+        )
     except Exception as error:
-        print(f"Falha ao salvar fornecedor ME no Postgres: {error}")
+        logger.warning(
+            "Falha ao salvar fornecedor ME no cache",
+            extra={
+                "source": "OpenCNPJ",
+                "error_type": type(error).__name__,
+            },
+        )
 
 
 def _get_json(
@@ -101,6 +116,16 @@ def _get_json(
                 return {}
 
             if response.status_code in {429, 500, 502, 503, 504} and tentativa < max_retries:
+                logger.info(
+                    "Resposta transitória do OpenCNPJ; nova tentativa agendada",
+                    extra={
+                        "source": "OpenCNPJ",
+                        "status_code": response.status_code,
+                        "attempt": tentativa + 1,
+                        "max_attempts": max_retries + 1,
+                        "retry_in_seconds": espera,
+                    },
+                )
                 time.sleep(espera)
                 espera *= 2
                 continue
@@ -111,10 +136,28 @@ def _get_json(
         except (requests.RequestException, ValueError) as error:
             ultimo_erro = error
             if tentativa == max_retries:
+                logger.warning(
+                    "Tentativas de consulta ao OpenCNPJ esgotadas",
+                    extra={
+                        "source": "OpenCNPJ",
+                        "attempts": max_retries + 1,
+                        "error_type": type(error).__name__,
+                    },
+                )
                 raise FonteCadastralIndisponivelError(
-                    f"Falha na fonte cadastral apos {max_retries + 1} tentativa(s): {url}"
+                    f"Falha na fonte cadastral apos {max_retries + 1} tentativa(s)."
                 ) from ultimo_erro
 
+            logger.info(
+                "Falha transitória ao consultar OpenCNPJ; nova tentativa agendada",
+                extra={
+                    "source": "OpenCNPJ",
+                    "attempt": tentativa + 1,
+                    "max_attempts": max_retries + 1,
+                    "retry_in_seconds": espera,
+                    "error_type": type(error).__name__,
+                },
+            )
             time.sleep(espera)
             espera *= 2
 
@@ -242,6 +285,16 @@ def coletar_fornecedores_em_lote(
                 time.sleep(throttle_segundos)
             resultados.append(coletar_fornecedor(cnpj_limpo, session=session))
 
+    status = Counter(str(item.get("opencnpj_status") or "desconhecido") for item in resultados)
+    logger.info(
+        "Coleta em lote no OpenCNPJ concluída",
+        extra={
+            "fonte": "OpenCNPJ",
+            "etapa": "coletar_fornecedores_em_lote",
+            "registros_processados": len(resultados),
+            "status_totals": dict(status),
+        },
+    )
     return resultados
 
 
@@ -406,6 +459,19 @@ def obter_fornecedores_com_cache(
 
         database.salvar_fornecedores_cache(registros_cache)
 
-    return pd.DataFrame(
+    resultado = pd.DataFrame(
         [resultados[cnpj] for cnpj in cnpjs_normalizados if cnpj in resultados]
     )
+    logger.info(
+        "Consulta cadastral com cache concluída",
+        extra={
+            "requested_count": len(cnpjs_normalizados),
+            "cache_hit_count": len(cnpjs_normalizados) - len(cnpjs_para_atualizar),
+            "refresh_count": len(cnpjs_para_atualizar),
+            "stale_count": sum(
+                1 for item in resultados.values() if item.get("cache_desatualizado")
+            ),
+            "result_count": len(resultado),
+        },
+    )
+    return resultado

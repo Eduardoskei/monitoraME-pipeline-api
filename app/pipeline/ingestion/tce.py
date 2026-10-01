@@ -60,9 +60,24 @@ def buscar_dados_tce(
             response = requests.get(url, params=params, timeout=(10, 30))
 
             if response.status_code == 204:
+                logger.info(
+                    "TCE-CE respondeu sem conteúdo",
+                    extra={"source": "TCE-CE", "endpoint": endpoint},
+                )
                 return {"elements": []}
 
             if response.status_code in {429, 500, 502, 503, 504} and tentativa < max_retries:
+                logger.info(
+                    "Resposta transitória do TCE-CE; nova tentativa agendada",
+                    extra={
+                        "source": "TCE-CE",
+                        "endpoint": endpoint,
+                        "status_code": response.status_code,
+                        "attempt": tentativa + 1,
+                        "max_attempts": max_retries + 1,
+                        "retry_in_seconds": espera,
+                    },
+                )
                 time.sleep(espera)
                 espera *= 2
                 continue
@@ -74,13 +89,32 @@ def buscar_dados_tce(
         except (requests.RequestException, ValueError) as error:
             if tentativa == max_retries:
                 registrar_falha_ingestao(error)
-                logger.warning("Falha ao buscar dados do TCE-CE: %s", error)
+                logger.warning(
+                    "Tentativas de consulta ao TCE-CE esgotadas",
+                    extra={
+                        "source": "TCE-CE",
+                        "endpoint": endpoint,
+                        "attempts": max_retries + 1,
+                        "error_type": type(error).__name__,
+                    },
+                )
                 if falhar_ao_esgotar:
                     raise TceIndisponivelError(
                         f"TCE-CE indisponível após {max_retries + 1} tentativa(s): {endpoint}."
                     ) from error
                 return {"elements": []}
 
+            logger.info(
+                "Falha transitória ao consultar TCE-CE; nova tentativa agendada",
+                extra={
+                    "source": "TCE-CE",
+                    "endpoint": endpoint,
+                    "attempt": tentativa + 1,
+                    "max_attempts": max_retries + 1,
+                    "retry_in_seconds": espera,
+                    "error_type": type(error).__name__,
+                },
+            )
             time.sleep(espera)
             espera *= 2
 

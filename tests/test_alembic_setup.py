@@ -64,6 +64,18 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_adiciona_logs_operacionais_da_aplicacao(self) -> None:
+        migration = ROOT / "alembic" / "logs" / "versions" / "0002_application_logs.py"
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.revision, "0002_application_logs")
+        self.assertEqual(modulo.down_revision, "0001_initial_logs")
+        self.assertIn('"logs_aplicacao"', texto)
+        self.assertIn("idx_logs_aplicacao_nivel_criado", texto)
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
     def test_migration_tce_encadeia_schema_versionado(self) -> None:
         migration = (
             ROOT

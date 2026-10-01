@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 import time
 import requests
@@ -6,10 +7,18 @@ from app.core import database
 from app.utils import banco_indisponivel as _ignorar_banco_indisponivel
 
 BASE_URL = IBGE_LOCALIDADES_BASE_URL
+logger = logging.getLogger(__name__)
 
 
 def _registrar_falha_banco(acao: str, error: Exception) -> None:
-    print(f"Falha ao {acao} no Postgres: {error}")
+    logger.warning(
+        "Falha de persistência; fluxo do IBGE seguirá sem cache",
+        extra={
+            "source": "IBGE",
+            "operation": acao,
+            "error_type": type(error).__name__,
+        },
+    )
 
 
 def _salvar_municipios(municipios: list[dict[str, Any]], uf: str) -> None:
@@ -17,6 +26,7 @@ def _salvar_municipios(municipios: list[dict[str, Any]], uf: str) -> None:
         database.salvar_municipios_ibge(municipios, uf)
     except RuntimeError as error:
         if _ignorar_banco_indisponivel(error):
+            _registrar_falha_banco("salvar municipios do IBGE", error)
             return
         _registrar_falha_banco("salvar municipios do IBGE", error)
     except Exception as error:
@@ -41,16 +51,47 @@ def buscar_dados_ibge(path: str, params: dict[str, Any] | None = None, max_retri
             response = requests.get(url, params=params or {}, timeout=(5, 20))
 
             if response.status_code in {429, 500, 502, 503, 504} and tentativa < max_retries:
+                logger.info(
+                    "Resposta transitória do IBGE; nova tentativa agendada",
+                    extra={
+                        "source": "IBGE",
+                        "path": path,
+                        "status_code": response.status_code,
+                        "attempt": tentativa + 1,
+                        "max_attempts": max_retries + 1,
+                        "retry_in_seconds": espera,
+                    },
+                )
                 time.sleep(espera)
                 espera *= 2
                 continue
 
             response.raise_for_status()
             return response.json()
-        except (requests.RequestException, ValueError):
+        except (requests.RequestException, ValueError) as error:
             if tentativa == max_retries:
+                logger.warning(
+                    "Tentativas de consulta ao IBGE esgotadas",
+                    extra={
+                        "source": "IBGE",
+                        "path": path,
+                        "attempts": max_retries + 1,
+                        "error_type": type(error).__name__,
+                    },
+                )
                 return [] if path.endswith("/municipios") else {}
 
+            logger.info(
+                "Falha transitória ao consultar IBGE; nova tentativa agendada",
+                extra={
+                    "source": "IBGE",
+                    "path": path,
+                    "attempt": tentativa + 1,
+                    "max_attempts": max_retries + 1,
+                    "retry_in_seconds": espera,
+                    "error_type": type(error).__name__,
+                },
+            )
             time.sleep(espera)
             espera *= 2
 
@@ -63,6 +104,16 @@ def listar_municipios(uf: str = "CE") -> list[dict[str, Any]]:
 
     if municipios:
         _salvar_municipios(municipios, uf)
+
+    logger.info(
+        "Consulta de municípios do IBGE concluída",
+        extra={
+            "fonte": "IBGE",
+            "etapa": "listar_municipios",
+            "uf": uf,
+            "registros_processados": len(municipios),
+        },
+    )
 
     return municipios
 

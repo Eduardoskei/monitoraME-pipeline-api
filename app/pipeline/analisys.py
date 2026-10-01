@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+import logging
 from typing import Any
 import pandas as pd
 from app.core import database
@@ -10,6 +11,9 @@ from app.pipeline.cleaners import tce as tce_cleaning
 from app.pipeline.enrichment.fornecedores import enriquecer_com_fornecedor, extrair_cnpjs_distintos
 from app.pipeline.ingestion import fornecedores, tce
 from app.pipeline.persistence import tce_despesas as tce_despesas_persistence
+
+
+logger = logging.getLogger(__name__)
 
 
 class CompetenciasTceIndisponiveisError(RuntimeError):
@@ -119,6 +123,12 @@ def _resolver_nome_municipio_tce(codigo_municipio: str) -> str:
     if municipio_salvo is not None:
         return municipio_salvo["nome"]
 
+    logger.info(
+        "Município ausente no cache; sincronização do TCE-CE será executada",
+        extra={
+            "codigo_municipio": codigo_municipio,
+        },
+    )
     municipios = tce.buscar_municipios()
     database.salvar_municipios_tce(municipios, UF_PADRAO)
     codigo_procurado = str(codigo_municipio).strip()
@@ -201,6 +211,13 @@ def _atualizar_competencias_tce(
     competencias: list[str],
     codigo_municipio: str,
 ) -> ResultadoAtualizacaoCompetenciasTce:
+    logger.info(
+        "Atualização de competências iniciada",
+        extra={
+            "codigo_municipio": codigo_municipio,
+            "competencias_count": len(competencias),
+        },
+    )
     agora = _agora_utc()
     publicacoes_existentes = tce_despesas_persistence.listar_publicacoes_competencias(
         codigo_municipio_tce=codigo_municipio,
@@ -258,11 +275,40 @@ def _atualizar_competencias_tce(
         else:
             ausentes.append(competencia)
 
+        logger.warning(
+            "Falha ao atualizar competência do TCE-CE",
+            extra={
+                "codigo_municipio": codigo_municipio,
+                "competencia": competencia,
+                "used_previous_version": usou_versao_publicada,
+                "error": erro_atualizacao,
+            },
+        )
+
     if not publicadas:
         meses = ", ".join(competencias)
+        logger.error(
+            "Nenhuma competência solicitada possui publicação utilizável",
+            extra={
+                "codigo_municipio": codigo_municipio,
+                "competencias_count": len(competencias),
+            },
+        )
         raise CompetenciasTceIndisponiveisError(
             f"Nenhuma competência do TCE-CE possui publicação utilizável: {meses}."
         )
+    logger.info(
+        "Atualização de competências concluída",
+        extra={
+            "codigo_municipio": codigo_municipio,
+            "published_count": len(publicadas),
+            "updated_count": len(atualizadas),
+            "reused_count": len(reutilizadas),
+            "stale_count": len(desatualizadas),
+            "missing_count": len(ausentes),
+            "failed_count": len(falhas),
+        },
+    )
     return ResultadoAtualizacaoCompetenciasTce(
         publicadas=publicadas,
         atualizadas=atualizadas,
@@ -302,6 +348,15 @@ def montar_base_tce_contratos(
 
     base = merge.montar_base_tce(df_contratos, df_contratados, fornecedores_df=fornecedores_df)
     base = _ordenar_tce_contratos_por_data(base)
+    logger.info(
+        "Base de contratos do TCE-CE montada",
+        extra={
+            "contratos_raw_count": len(contratos_brutos),
+            "contratados_raw_count": len(contratados_brutos),
+            "output_count": len(base),
+            "supplier_enrichment": enriquecer_fornecedores,
+        },
+    )
     metadados = {
         "fonte": "TCE-CE",
         "parametros": {
@@ -371,6 +426,14 @@ def montar_base_analitica_tce(
         codigo_municipio=codigo_municipio,
         municipio_comprador=municipio_comprador,
         uf_comprador=UF_PADRAO,
+    )
+    logger.info(
+        "Base analítica do TCE-CE montada",
+        extra={
+            "input_count": len(empenhos),
+            "output_count": len(base_analitica),
+            "competencias_count": len(atualizacao.publicadas),
+        },
     )
     metadados = {
         "fonte": "TCE-CE",
