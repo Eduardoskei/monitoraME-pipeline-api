@@ -69,7 +69,7 @@ def _registro() -> dict[str, object]:
 
 class EmpenhosTest(unittest.TestCase):
     @patch("app.pipeline.empenhos.persistence.listar_empenhos_publicados_paginados")
-    @patch("app.pipeline.empenhos.database.localizar_municipio_tce_por_ibge")
+    @patch("app.pipeline.empenhos.database.localizar_municipio_tce")
     def test_lista_aplica_filtros_e_formata_paginacao(self, localizar, listar) -> None:
         localizar.return_value = {
             "codigo_municipio_tce": "057",
@@ -83,7 +83,7 @@ class EmpenhosTest(unittest.TestCase):
             start_date="2025-01-01",
             end_date="2025-12-31",
             uf="CE",
-            municipality_ibge_code="2304400",
+            municipality_tce_code="057",
             company_sizes=["OTHER"],
             supplier_origins=["NO_MUNICIPIO_COMPRADOR"],
             expense_element_codes=["39"],
@@ -109,7 +109,7 @@ class EmpenhosTest(unittest.TestCase):
                 start_date="2025-12-31",
                 end_date="2025-01-01",
                 uf="CE",
-                municipality_ibge_code=None,
+                municipality_tce_code=None,
                 company_sizes=[],
                 supplier_origins=[],
                 expense_element_codes=[],

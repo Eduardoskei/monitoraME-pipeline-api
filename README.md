@@ -217,7 +217,7 @@ nem acessa TCE-CE, IBGE ou OpenCNPJ. Ela considera apenas empenhos dos sete
 elementos monitorados pertencentes a lotes com status `PUBLICADO`.
 
 Os parâmetros obrigatórios são `start_date` e `end_date`. A consulta aceita
-também `uf`, `municipality_ibge_code`, listas repetidas de `company_sizes`,
+também `uf`, `municipality_tce_code`, listas repetidas de `company_sizes`,
 `supplier_origins` e `expense_element_codes`, além de `search`, `page`,
 `page_size`, `sort_by` e `sort_order`. Filtros de dimensões diferentes usam
 `AND`; valores repetidos na mesma dimensão usam `OR`. Sem filtro de elemento,
@@ -226,7 +226,7 @@ os sete elementos monitorados são incluídos.
 Exemplo:
 
 ```http
-GET /pipeline/tce/empenhos?start_date=2025-01-01&end_date=2025-12-31&municipality_ibge_code=2304400&company_sizes=ME&company_sizes=MEI&expense_element_codes=39&page=1&page_size=50&sort_by=net_value&sort_order=desc
+GET /pipeline/tce/empenhos?start_date=2025-01-01&end_date=2025-12-31&municipality_tce_code=057&company_sizes=ME&company_sizes=MEI&expense_element_codes=39&page=1&page_size=50&sort_by=net_value&sort_order=desc
 ```
 
 Cada item retorna a `chave_empenho` canônica, um `display_id` no formato

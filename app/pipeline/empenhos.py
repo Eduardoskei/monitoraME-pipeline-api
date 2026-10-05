@@ -46,18 +46,18 @@ def _data_iso(valor: str, campo: str) -> date:
         ) from error
 
 
-def _municipio(codigo_ibge: str | None, uf: str) -> dict[str, str] | None:
-    if codigo_ibge is None:
+def _municipio(codigo_tce: str | None, uf: str) -> dict[str, str] | None:
+    if codigo_tce is None:
         return None
-    municipio = database.localizar_municipio_tce_por_ibge(codigo_ibge, uf=uf)
-    if municipio is None:
+    municipio = database.localizar_municipio_tce(codigo_tce)
+    if municipio is None or municipio["uf"].upper() != uf:
         raise EmpenhoRequestError(
             "MUNICIPALITY_NOT_FOUND",
             "Municipio nao encontrado no catalogo local.",
             [{
-                "field": "municipality_ibge_code",
+                "field": "municipality_tce_code",
                 "reason": "not_found",
-                "value": codigo_ibge,
+                "value": codigo_tce,
             }],
             status_code=404,
         )
@@ -118,7 +118,7 @@ def listar_empenhos(
     start_date: str,
     end_date: str,
     uf: str,
-    municipality_ibge_code: str | None,
+    municipality_tce_code: str | None,
     company_sizes: list[str],
     supplier_origins: list[str],
     expense_element_codes: list[str],
@@ -149,7 +149,7 @@ def listar_empenhos(
             "expense_element_codes possui codigos nao monitorados.",
             [{"field": "expense_element_codes", "reason": "unsupported_value", "value": invalidos}],
         )
-    municipio = _municipio(municipality_ibge_code, uf_normalizada)
+    municipio = _municipio(municipality_tce_code, uf_normalizada)
     portes = [PORTES_FILTRO[item] for item in company_sizes]
     resultado = persistence.listar_empenhos_publicados_paginados(
         data_inicial=inicio,
@@ -172,7 +172,7 @@ def listar_empenhos(
         "external_requests": False,
         "filters": {
             "uf": uf_normalizada,
-            "municipality_ibge_code": municipality_ibge_code,
+            "municipality_tce_code": municipality_tce_code,
             "start_date": start_date,
             "end_date": end_date,
             "company_sizes": company_sizes,
