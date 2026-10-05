@@ -5,8 +5,9 @@ from fastapi.responses import JSONResponse
 from app.api.errors import REQUEST_ID_HEADER, obter_request_id, resposta_erro
 from app.api.schemas.comparisons import CompanySize, SupplierOrigin, TceComparisonRequest
 from app.api.schemas.empenhos import EmpenhoSortField, SortOrder
+from app.api.schemas.fornecedores import SupplierDocumentType, SupplierSortField
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
-from app.pipeline import analisys, comparisons, empenhos
+from app.pipeline import analisys, comparisons, empenhos, fornecedores
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -246,7 +247,7 @@ def _erro_empenhos(
 ) -> JSONResponse:
     if isinstance(error, empenhos.EmpenhoRequestError):
         logger.info(
-            "Consulta de empenhos rejeitada",
+            "Consulta local rejeitada",
             extra={"request_id": request_id, "error_code": error.code, "error": error.message},
         )
         return resposta_erro(
@@ -257,7 +258,7 @@ def _erro_empenhos(
             request_id=request_id,
         )
     logger.exception(
-        "Falha inesperada ao consultar empenhos",
+        "Falha inesperada ao consultar dados locais",
         extra={"request_id": request_id, "error_type": type(error).__name__},
     )
     return resposta_erro(
@@ -342,6 +343,154 @@ def tce_empenho_detalhe(
             error,
             request_id=request_id,
             mensagem_interna="Falha inesperada ao consultar o empenho.",
+        )
+
+
+@router.get(
+    "/tce/fornecedores",
+    summary="Lista fornecedores presentes nos empenhos publicados",
+    description=(
+        "Agrupa fornecedores e valores do recorte usando exclusivamente dados "
+        "publicados e cadastros armazenados no banco local."
+    ),
+    response_model=None,
+)
+def tce_fornecedores(
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_tce_code: Annotated[str | None, Query(pattern=r"^\d{3}$")] = None,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+    search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    sort_by: SupplierSortField = SupplierSortField.NET_VALUE,
+    sort_order: SortOrder = SortOrder.DESC,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return fornecedores.listar_fornecedores(
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_tce_code=municipality_tce_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+            search=search,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by.value,
+            sort_order=sort_order.value,
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao listar os fornecedores.",
+        )
+
+
+@router.get(
+    "/tce/fornecedores/{tipo_documento}/{documento}",
+    summary="Consulta o resumo analitico de um fornecedor",
+    description=(
+        "Retorna cadastro armazenado, indicadores, evolucao mensal, elementos "
+        "de despesa e participacao do fornecedor no recorte."
+    ),
+    response_model=None,
+)
+def tce_fornecedor_detalhe(
+    tipo_documento: SupplierDocumentType,
+    documento: str,
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_tce_code: Annotated[str | None, Query(pattern=r"^\d{3}$")] = None,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return fornecedores.obter_fornecedor(
+            tipo_documento=tipo_documento.value,
+            documento=documento,
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_tce_code=municipality_tce_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao consultar o fornecedor.",
+        )
+
+
+@router.get(
+    "/tce/fornecedores/{tipo_documento}/{documento}/empenhos",
+    summary="Lista os empenhos publicados de um fornecedor",
+    description=(
+        "Pagina as notas consideradas para o fornecedor e recorte sem recalcular "
+        "os graficos da rota de detalhe."
+    ),
+    response_model=None,
+)
+def tce_fornecedor_empenhos(
+    tipo_documento: SupplierDocumentType,
+    documento: str,
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_tce_code: Annotated[str | None, Query(pattern=r"^\d{3}$")] = None,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+    search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    sort_by: EmpenhoSortField = EmpenhoSortField.NET_VALUE,
+    sort_order: SortOrder = SortOrder.DESC,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return fornecedores.listar_empenhos_fornecedor(
+            tipo_documento=tipo_documento.value,
+            documento=documento,
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_tce_code=municipality_tce_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+            search=search,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by.value,
+            sort_order=sort_order.value,
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao listar os empenhos do fornecedor.",
         )
 
 

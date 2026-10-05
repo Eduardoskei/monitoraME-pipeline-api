@@ -93,6 +93,9 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `POST /pipeline/tce/comparisons`: compara dois overviews usando somente dados armazenados.
 - `GET /pipeline/tce/empenhos`: lista e pagina empenhos publicados armazenados.
 - `GET /pipeline/tce/empenhos/{chave_empenho}`: detalha um empenho e suas anulações.
+- `GET /pipeline/tce/fornecedores`: lista fornecedores e valores no recorte.
+- `GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}`: retorna cadastro, indicadores e gráficos do fornecedor.
+- `GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}/empenhos`: pagina as notas consideradas do fornecedor.
 - `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
@@ -243,6 +246,41 @@ e metadados do lote publicado. O payload bruto das fontes não é exposto.
 As duas rotas usam o mesmo envelope padronizado de erro e propagam
 `X-Request-ID`. Autenticação e assinatura permanecem sob responsabilidade do
 proxy que publica a API.
+
+### Consulta de fornecedores armazenados
+
+As três rotas de fornecedores são somente leitura e consideram exclusivamente
+empenhos dos lotes `PUBLICADO`. Elas recebem o mesmo recorte por período,
+município TCE, porte empresarial, origem e elemento de despesa usado pela
+consulta de empenhos.
+
+`GET /pipeline/tce/fornecedores` agrupa as notas por tipo e documento do
+fornecedor. A resposta apresenta nome, porte, disponibilidade cadastral,
+origens no recorte, valores bruto, anulado e considerado, quantidade de notas,
+municípios e datas da primeira e última nota. Fornecedores sem cadastro no
+OpenCNPJ continuam na listagem com `cadastro_status=NAO_DISPONIVEL`.
+
+```http
+GET /pipeline/tce/fornecedores?start_date=2025-01-01&end_date=2025-12-31&municipality_tce_code=057&page=1&page_size=50&sort_by=net_value&sort_order=desc
+```
+
+`GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}` aceita
+`CNPJ` ou `CPF` no tipo e retorna o cadastro armazenado, totais do recorte,
+evolução mensal, distribuição pelos sete elementos e participação no valor
+total filtrado. O cadastro é a observação mais recente disponível e não uma
+fotografia histórica do exercício.
+
+```http
+GET /pipeline/tce/fornecedores/CNPJ/05537536000164?start_date=2025-01-01&end_date=2025-12-31&municipality_tce_code=057
+```
+
+`GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}/empenhos`
+retorna as notas em uma consulta separada e paginada, preservando o mesmo
+formato dos itens de `/pipeline/tce/empenhos`. Assim, navegar ou ordenar a
+tabela não recalcula os gráficos do detalhe.
+
+Nenhuma dessas rotas atualiza o cache cadastral ou consulta TCE-CE, IBGE ou
+OpenCNPJ. O payload bruto do cadastro não é exposto.
 
 ## Persistência
 

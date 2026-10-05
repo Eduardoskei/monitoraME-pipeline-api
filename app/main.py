@@ -21,6 +21,9 @@ from app.api.endpoints.pipeline import (
     tce_contratos,
     tce_empenho_detalhe,
     tce_empenhos,
+    tce_fornecedor_detalhe,
+    tce_fornecedor_empenhos,
+    tce_fornecedores,
     tce_kpi_portes_por_mes,
     tce_overview,
 )
@@ -41,6 +44,9 @@ __all__ = [
     "tce_contratos",
     "tce_empenho_detalhe",
     "tce_empenhos",
+    "tce_fornecedor_detalhe",
+    "tce_fornecedor_empenhos",
+    "tce_fornecedores",
     "tce_kpi_portes_por_mes",
     "tce_overview",
 ]

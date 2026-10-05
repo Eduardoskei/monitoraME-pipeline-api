@@ -128,36 +128,22 @@ def listar_empenhos(
     sort_by: str,
     sort_order: str,
 ) -> dict[str, Any]:
-    inicio, fim = _data_iso(start_date, "start_date"), _data_iso(end_date, "end_date")
-    if inicio > fim:
-        raise EmpenhoRequestError(
-            "INVALID_DATE_RANGE",
-            "start_date deve ser menor ou igual a end_date.",
-            [{"field": "start_date", "reason": "after_end_date", "value": start_date}],
-        )
+    inicio, fim, municipio, portes, elementos = preparar_filtros(
+        start_date=start_date,
+        end_date=end_date,
+        uf=uf,
+        municipality_tce_code=municipality_tce_code,
+        company_sizes=company_sizes,
+        expense_element_codes=expense_element_codes,
+    )
     uf_normalizada = uf.strip().upper()
-    if uf_normalizada != UF_PADRAO.upper():
-        raise EmpenhoRequestError(
-            "UNSUPPORTED_UF",
-            f"A consulta possui dados apenas para a UF {UF_PADRAO.upper()}.",
-            [{"field": "uf", "reason": "unsupported_uf", "value": uf}],
-        )
-    invalidos = sorted(set(expense_element_codes) - set(NATUREZAS_DESPESA_MONITORADAS))
-    if invalidos:
-        raise EmpenhoRequestError(
-            "INVALID_EXPENSE_ELEMENT_CODE",
-            "expense_element_codes possui codigos nao monitorados.",
-            [{"field": "expense_element_codes", "reason": "unsupported_value", "value": invalidos}],
-        )
-    municipio = _municipio(municipality_tce_code, uf_normalizada)
-    portes = [PORTES_FILTRO[item] for item in company_sizes]
     resultado = persistence.listar_empenhos_publicados_paginados(
         data_inicial=inicio,
         data_final=fim,
         codigo_municipio_tce=municipio["codigo_municipio_tce"] if municipio else None,
         portes=portes,
         origens=supplier_origins,
-        elementos=expense_element_codes or list(NATUREZAS_DESPESA_MONITORADAS),
+        elementos=elementos,
         busca=_normalizar_busca(search),
         pagina=page,
         tamanho_pagina=page_size,
@@ -191,6 +177,42 @@ def listar_empenhos(
         "sorting": {"sort_by": sort_by, "sort_order": sort_order},
         "items": [_item(item) for item in resultado["registros"]],
     }
+
+
+def preparar_filtros(
+    *,
+    start_date: str,
+    end_date: str,
+    uf: str,
+    municipality_tce_code: str | None,
+    company_sizes: list[str],
+    expense_element_codes: list[str],
+) -> tuple[date, date, dict[str, str] | None, list[str], list[str]]:
+    inicio, fim = _data_iso(start_date, "start_date"), _data_iso(end_date, "end_date")
+    if inicio > fim:
+        raise EmpenhoRequestError(
+            "INVALID_DATE_RANGE",
+            "start_date deve ser menor ou igual a end_date.",
+            [{"field": "start_date", "reason": "after_end_date", "value": start_date}],
+        )
+    uf_normalizada = uf.strip().upper()
+    if uf_normalizada != UF_PADRAO.upper():
+        raise EmpenhoRequestError(
+            "UNSUPPORTED_UF",
+            f"A consulta possui dados apenas para a UF {UF_PADRAO.upper()}.",
+            [{"field": "uf", "reason": "unsupported_uf", "value": uf}],
+        )
+    invalidos = sorted(set(expense_element_codes) - set(NATUREZAS_DESPESA_MONITORADAS))
+    if invalidos:
+        raise EmpenhoRequestError(
+            "INVALID_EXPENSE_ELEMENT_CODE",
+            "expense_element_codes possui codigos nao monitorados.",
+            [{"field": "expense_element_codes", "reason": "unsupported_value", "value": invalidos}],
+        )
+    municipio = _municipio(municipality_tce_code, uf_normalizada)
+    portes = [PORTES_FILTRO[item] for item in company_sizes]
+    elementos = expense_element_codes or list(NATUREZAS_DESPESA_MONITORADAS)
+    return inicio, fim, municipio, portes, elementos
 
 
 def obter_empenho(chave_empenho: str) -> dict[str, Any]:
@@ -246,4 +268,9 @@ def obter_empenho(chave_empenho: str) -> dict[str, Any]:
     }
 
 
-__all__ = ["EmpenhoRequestError", "listar_empenhos", "obter_empenho"]
+__all__ = [
+    "EmpenhoRequestError",
+    "listar_empenhos",
+    "obter_empenho",
+    "preparar_filtros",
+]
