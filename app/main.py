@@ -4,6 +4,10 @@ import logging
 from time import perf_counter
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from app.api.errors import COMPARISONS_PATH, resposta_erro_validacao_comparison
 from app.core import database, log_database
 from app.core.logging import (
     configurar_logging,
@@ -13,6 +17,7 @@ from app.core.logging import (
 from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
     tce_analitico_indicadores,
+    tce_comparisons,
     tce_contratos,
     tce_kpi_portes_por_mes,
     tce_overview,
@@ -30,6 +35,7 @@ __all__ = [
     "health",
     "lifespan",
     "tce_analitico_indicadores",
+    "tce_comparisons",
     "tce_contratos",
     "tce_kpi_portes_por_mes",
     "tce_overview",
@@ -68,6 +74,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    error: RequestValidationError,
+) -> JSONResponse:
+    if request.url.path == COMPARISONS_PATH:
+        return resposta_erro_validacao_comparison(request, error)
+    return await request_validation_exception_handler(request, error)
 
 
 @app.middleware("http")

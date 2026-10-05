@@ -272,6 +272,37 @@ def localizar_municipio_tce(codigo_municipio_tce: str | int) -> dict[str, str] |
     return dict(registro) if registro is not None else None
 
 
+def localizar_municipio_tce_por_ibge(
+    codigo_municipio_ibge: str | int,
+    *,
+    uf: str | None = None,
+) -> dict[str, str] | None:
+    """Resolve o municipio e o codigo interno do TCE usando apenas o banco local."""
+    init_db()
+    consulta = (
+        select(
+            TceMunicipio.codigo_municipio_tce,
+            TceMunicipio.codigo_municipio_ibge,
+            IbgeMunicipio.nome,
+            IbgeMunicipio.uf,
+        )
+        .join(
+            IbgeMunicipio,
+            IbgeMunicipio.codigo_municipio == TceMunicipio.codigo_municipio_ibge,
+        )
+        .where(
+            TceMunicipio.codigo_municipio_ibge == str(codigo_municipio_ibge).strip()
+        )
+    )
+    if uf:
+        consulta = consulta.where(IbgeMunicipio.uf == str(uf).strip().upper())
+
+    with orm.main_session() as session:
+        registro = session.execute(consulta).mappings().first()
+
+    return dict(registro) if registro is not None else None
+
+
 def salvar_fornecedor_me(cnpj: str, razao_social: str | None, porte: str = "ME") -> None:
     if porte != "ME":
         raise ValueError("Apenas fornecedores ME devem ser salvos.")
@@ -333,6 +364,7 @@ __all__ = [
     "localizar_municipio_ibge",
     "localizar_municipio_por_nome_ibge",
     "localizar_municipio_tce",
+    "localizar_municipio_tce_por_ibge",
     "salvar_fornecedor_me",
     "salvar_fornecedores_cache",
     "salvar_municipio_ibge",

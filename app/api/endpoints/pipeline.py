@@ -1,8 +1,11 @@
 import logging
-from typing import Annotated
-from fastapi import APIRouter, HTTPException, Query
+from typing import Annotated, Any
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
+from app.api.errors import REQUEST_ID_HEADER, obter_request_id, resposta_erro
+from app.api.schemas.comparisons import TceComparisonRequest
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO
-from app.pipeline import analisys
+from app.pipeline import analisys, comparisons
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -175,6 +178,63 @@ def tce_overview(
         )
     except Exception as error:
         raise _erro_pipeline(error) from error
+
+
+@router.post(
+    "/tce/comparisons",
+    summary="Compara dois overviews armazenados do TCE-CE",
+    description=(
+        "Compara municipios, periodos ou ambos usando exclusivamente competencias "
+        "e fornecedores ja armazenados no banco. Nao executa ingestao nem consulta fontes externas."
+    ),
+    response_description="Overviews completos dos dois lados e secoes com maior, menor e diferenca.",
+    response_model=None,
+    responses={
+        404: {"description": "Municipio nao encontrado no catalogo local."},
+        422: {"description": "Filtros invalidos ou dados locais indisponiveis."},
+        500: {"description": "Falha inesperada ao consultar o banco local."},
+    },
+)
+def tce_comparisons(
+    payload: TceComparisonRequest,
+    request: Request,
+    response: Response,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return comparisons.consultar_comparacao_tce(payload.model_dump(mode="json"))
+    except comparisons.ComparisonRequestError as error:
+        logger.info(
+            "Comparacao rejeitada pelos filtros ou dados locais",
+            extra={
+                "request_id": request_id,
+                "error_code": error.code,
+                "error": error.message,
+            },
+        )
+        return resposta_erro(
+            status_code=error.status_code,
+            code=error.code,
+            message=error.message,
+            details=error.details,
+            request_id=request_id,
+        )
+    except Exception as error:
+        logger.exception(
+            "Falha inesperada ao consultar comparacao",
+            extra={
+                "request_id": request_id,
+                "error_type": type(error).__name__,
+            },
+        )
+        return resposta_erro(
+            status_code=500,
+            code="INTERNAL_ERROR",
+            message="Falha inesperada ao consultar os dados da comparacao.",
+            details=[],
+            request_id=request_id,
+        )
 
 
 @router.get(
