@@ -90,6 +90,7 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/contratos`: consulta e enriquece contratos do TCE-CE.
 - `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
 - `GET /pipeline/tce/overview`: calcula o overview exclusivo de ME e MEI.
+- `POST /pipeline/tce/comparisons`: compara dois overviews usando somente dados armazenados.
 - `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
@@ -130,6 +131,82 @@ somente empenhos de ME e MEI e mantém elementos sem movimento com valor zero.
 Valores monetários são inteiros em centavos e percentuais variam de `0` a
 `100`. Um período publicado sem compras de porte identificado retorna `200`,
 KPIs zerados, evolução vazia e os quatro destinos com valor e percentual zero.
+
+### Comparação de overviews
+
+`POST /pipeline/tce/comparisons` recebe dois lados independentes e permite
+comparar períodos (`PERIODS`), municípios (`MUNICIPALITIES`) ou ambos
+(`MIXED`). Os municípios são informados pelo código IBGE e resolvidos para o
+código interno do TCE usando o mapeamento armazenado.
+
+A rota é estritamente somente leitura. Ela não atualiza competências, não
+renova o cadastro de fornecedores e não consulta TCE-CE, IBGE ou OpenCNPJ.
+Autenticação e assinatura são responsabilidades do proxy que publica a API.
+
+Exemplo de comparação mista:
+
+```json
+{
+  "comparison_mode": "MIXED",
+  "left": {
+    "label": "Acaraú 2025",
+    "filters": {
+      "uf": "CE",
+      "municipality_ibge_code": "2300200",
+      "start_date": "2025-01-01",
+      "end_date": "2025-12-31",
+      "company_sizes": ["ME", "EPP", "MEI", "OTHER", "UNKNOWN"],
+      "supplier_origins": [],
+      "expense_element_codes": []
+    }
+  },
+  "right": {
+    "label": "Sobral 2024",
+    "filters": {
+      "uf": "CE",
+      "municipality_ibge_code": "2312908",
+      "start_date": "2024-01-01",
+      "end_date": "2024-12-31",
+      "company_sizes": ["ME", "EPP", "MEI", "OTHER", "UNKNOWN"],
+      "supplier_origins": [],
+      "expense_element_codes": []
+    }
+  }
+}
+```
+
+Listas vazias significam que a dimensão não restringe a base. Os portes
+aceitos são `ME`, `MEI`, `EPP`, `OTHER` e `UNKNOWN`; as origens aceitas são
+`NO_MUNICIPIO_COMPRADOR`, `EM_OUTRO_MUNICIPIO`, `FORA_DO_CEARA` e
+`ORIGEM_NAO_IDENTIFICADA`. Os elementos aceitos são `30`, `32`, `35`, `39`,
+`40`, `51` e `52`.
+
+`left.overview` e `right.overview` preservam todos os blocos do overview. O
+objeto `sections` acrescenta maior, menor e diferença absoluta para cada KPI,
+porte, elemento, destino e posição da série mensal. Competências publicadas
+sem movimento são válidas e aparecem com zero na seção mensal; competências
+sem publicação aparecem em `competencias_ausentes` e não são convertidas em
+zero.
+
+Erros da rota usam um envelope próprio e propagam `X-Request-ID` quando o
+cabeçalho é enviado pelo proxy:
+
+```json
+{
+  "error": {
+    "code": "INVALID_DATE_RANGE",
+    "message": "start_date deve ser menor ou igual a end_date.",
+    "details": [
+      {
+        "field": "left.filters.start_date",
+        "reason": "after_end_date",
+        "value": "2026-12-31"
+      }
+    ],
+    "request_id": "req_01K6ME9W3H"
+  }
+}
+```
 
 ## Persistência
 
