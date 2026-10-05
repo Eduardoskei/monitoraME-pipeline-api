@@ -91,6 +91,14 @@ class MainTest(unittest.TestCase):
         self.assertIn("/pipeline/tce/comparisons", rotas)
         self.assertIn("/pipeline/tce/empenhos", rotas)
         self.assertIn("/pipeline/tce/empenhos/{chave_empenho}", rotas)
+        self.assertIn("/pipeline/tce/fornecedores", rotas)
+        self.assertIn(
+            "/pipeline/tce/fornecedores/{tipo_documento}/{documento}", rotas
+        )
+        self.assertIn(
+            "/pipeline/tce/fornecedores/{tipo_documento}/{documento}/empenhos",
+            rotas,
+        )
         self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
 
     @patch("app.main.database.close_pool")

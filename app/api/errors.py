@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 COMPARISONS_PATH = "/pipeline/tce/comparisons"
 EMPENHOS_PATH = "/pipeline/tce/empenhos"
+FORNECEDORES_PATH = "/pipeline/tce/fornecedores"
 REQUEST_ID_HEADER = "X-Request-ID"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
@@ -45,8 +46,12 @@ def resposta_erro(
 
 
 def usa_erro_padronizado(path: str) -> bool:
-    return path == COMPARISONS_PATH or path == EMPENHOS_PATH or path.startswith(
-        f"{EMPENHOS_PATH}/"
+    return (
+        path == COMPARISONS_PATH
+        or path == EMPENHOS_PATH
+        or path.startswith(f"{EMPENHOS_PATH}/")
+        or path == FORNECEDORES_PATH
+        or path.startswith(f"{FORNECEDORES_PATH}/")
     )
 
 
@@ -72,7 +77,7 @@ def resposta_erro_validacao(
 
     code = "INVALID_REQUEST"
     message = "A requisicao possui campos invalidos."
-    if request.url.path == EMPENHOS_PATH and details:
+    if request.url.path.startswith((EMPENHOS_PATH, FORNECEDORES_PATH)) and details:
         campo = details[0]["field"]
         code, message = {
             "page": ("INVALID_PAGE", "page deve ser maior ou igual a 1."),
@@ -100,6 +105,7 @@ resposta_erro_validacao_comparison = resposta_erro_validacao
 __all__ = [
     "COMPARISONS_PATH",
     "EMPENHOS_PATH",
+    "FORNECEDORES_PATH",
     "REQUEST_ID_HEADER",
     "obter_request_id",
     "resposta_erro",

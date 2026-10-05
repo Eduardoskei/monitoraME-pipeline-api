@@ -165,6 +165,25 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_adiciona_indice_de_empenhos_por_fornecedor(self) -> None:
+        migration = (
+            ROOT
+            / "alembic"
+            / "main"
+            / "versions"
+            / "0006_tce_empenhos_fornecedor_index.py"
+        )
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.revision, "0006_tce_empenhos_fornecedor_index")
+        self.assertEqual(modulo.down_revision, "0005_fornecedores_cache")
+        self.assertIn('"idx_tce_empenhos_fornecedor_data"', texto)
+        self.assertIn('"documento_fornecedor"', texto)
+        self.assertIn('"data_empenho"', texto)
+        self.assertTrue(callable(modulo.upgrade))
+        self.assertTrue(callable(modulo.downgrade))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -231,6 +231,13 @@ Index(
     TceEmpenho.data_empenho,
     TceEmpenho.codigo_elemento_despesa,
 )
+Index(
+    "idx_tce_empenhos_fornecedor_data",
+    TceEmpenho.tipo_documento_fornecedor,
+    TceEmpenho.documento_fornecedor,
+    TceEmpenho.data_empenho,
+    postgresql_where=text("documento_fornecedor IS NOT NULL"),
+)
 Index("idx_tce_anulacoes_run", TceAnulacaoEmpenho.run_id)
 Index("idx_tce_anulacoes_chave_empenho", TceAnulacaoEmpenho.chave_empenho)
 

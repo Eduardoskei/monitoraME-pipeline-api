@@ -535,6 +535,8 @@ def listar_empenhos_publicados_paginados(
     tamanho_pagina: int,
     ordenar_por: str,
     ordem: str,
+    tipo_documento_fornecedor: str | None = None,
+    documento_fornecedor: str | None = None,
 ) -> dict[str, Any]:
     """Lista somente empenhos monitorados pertencentes aos lotes publicados."""
     database.init_db()
@@ -555,6 +557,12 @@ def listar_empenhos_publicados_paginados(
     ]
     if codigo_municipio_tce:
         filtros.append(TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce)
+    if tipo_documento_fornecedor:
+        filtros.append(
+            TceEmpenho.tipo_documento_fornecedor == tipo_documento_fornecedor
+        )
+    if documento_fornecedor:
+        filtros.append(TceEmpenho.documento_fornecedor == documento_fornecedor)
     if portes:
         filtros.append(expressoes["porte"].in_(portes))
     if origens:
