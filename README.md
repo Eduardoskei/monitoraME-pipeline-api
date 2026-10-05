@@ -91,6 +91,8 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
 - `GET /pipeline/tce/overview`: calcula o overview exclusivo de ME e MEI.
 - `POST /pipeline/tce/comparisons`: compara dois overviews usando somente dados armazenados.
+- `GET /pipeline/tce/empenhos`: lista e pagina empenhos publicados armazenados.
+- `GET /pipeline/tce/empenhos/{chave_empenho}`: detalha um empenho e suas anulações.
 - `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
@@ -207,6 +209,40 @@ cabeçalho é enviado pelo proxy:
   }
 }
 ```
+
+### Consulta de empenhos armazenados
+
+`GET /pipeline/tce/empenhos` é uma rota somente leitura: não executa ingestão
+nem acessa TCE-CE, IBGE ou OpenCNPJ. Ela considera apenas empenhos dos sete
+elementos monitorados pertencentes a lotes com status `PUBLICADO`.
+
+Os parâmetros obrigatórios são `start_date` e `end_date`. A consulta aceita
+também `uf`, `municipality_ibge_code`, listas repetidas de `company_sizes`,
+`supplier_origins` e `expense_element_codes`, além de `search`, `page`,
+`page_size`, `sort_by` e `sort_order`. Filtros de dimensões diferentes usam
+`AND`; valores repetidos na mesma dimensão usam `OR`. Sem filtro de elemento,
+os sete elementos monitorados são incluídos.
+
+Exemplo:
+
+```http
+GET /pipeline/tce/empenhos?start_date=2025-01-01&end_date=2025-12-31&municipality_ibge_code=2304400&company_sizes=ME&company_sizes=MEI&expense_element_codes=39&page=1&page_size=50&sort_by=net_value&sort_order=desc
+```
+
+Cada item retorna a `chave_empenho` canônica, um `display_id` no formato
+`EMP-AAAA-NUMERO`, data, município comprador, fornecedor, porte, origem,
+elemento de despesa e valores bruto, anulado e líquido em centavos. A busca
+aceita chave, número, `display_id`, documento ou nome do fornecedor.
+
+`GET /pipeline/tce/empenhos/{chave_empenho}` recebe a chave com caracteres
+reservados codificados na URL (por exemplo, `|` como `%7C`). O detalhe inclui
+classificação orçamentária, dados cadastrais armazenados do fornecedor,
+referências de contrato e licitação, lista das anulações, valores consolidados
+e metadados do lote publicado. O payload bruto das fontes não é exposto.
+
+As duas rotas usam o mesmo envelope padronizado de erro e propagam
+`X-Request-ID`. Autenticação e assinatura permanecem sob responsabilidade do
+proxy que publica a API.
 
 ## Persistência
 

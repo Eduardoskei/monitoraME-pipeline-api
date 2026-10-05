@@ -8,11 +8,18 @@ from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Any, Iterable
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import case, delete, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core import database, orm
-from app.core.models import TceAnulacaoEmpenho, TceDespesaIngestionRun, TceEmpenho
+from app.core.models import (
+    FornecedorCache,
+    IbgeMunicipio,
+    TceAnulacaoEmpenho,
+    TceDespesaIngestionRun,
+    TceEmpenho,
+    TceMunicipio,
+)
 
 
 STATUS_EM_VALIDACAO = "EM_VALIDACAO"
@@ -422,6 +429,310 @@ def listar_empenhos_liquidos_publicados(
     ]
 
 
+def _texto_normalizado_sql(expressao: Any) -> Any:
+    return func.translate(
+        func.upper(func.trim(expressao)),
+        "ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ",
+        "AAAAAEEEEIIIIOOOOOUUUUC",
+    )
+
+
+def _expressoes_empenhos_publicados() -> dict[str, Any]:
+    dados = FornecedorCache.dados_normalizados
+    porte = func.coalesce(dados["porte_padronizado"].astext, "NAO_IDENTIFICADO")
+    municipio_fornecedor = dados["municipio_sede"].astext
+    uf_fornecedor = func.upper(func.trim(dados["uf_sede"].astext))
+    origem = case(
+        (
+            or_(
+                FornecedorCache.cnpj.is_(None),
+                uf_fornecedor.is_(None),
+                uf_fornecedor == "",
+                (
+                    (uf_fornecedor == "CE")
+                    & or_(municipio_fornecedor.is_(None), func.trim(municipio_fornecedor) == "")
+                ),
+            ),
+            "ORIGEM_NAO_IDENTIFICADA",
+        ),
+        (uf_fornecedor != "CE", "FORA_DO_CEARA"),
+        (
+            _texto_normalizado_sql(municipio_fornecedor)
+            == _texto_normalizado_sql(IbgeMunicipio.nome),
+            "NO_MUNICIPIO_COMPRADOR",
+        ),
+        else_="EM_OUTRO_MUNICIPIO",
+    )
+    return {
+        "porte": porte,
+        "municipio_fornecedor": municipio_fornecedor,
+        "uf_fornecedor": uf_fornecedor,
+        "origem": origem,
+    }
+
+
+def _subconsulta_anulacoes_publicadas(
+    *,
+    codigo_municipio_tce: str | None = None,
+    chave_empenho: str | None = None,
+) -> Any:
+    filtros = [TceDespesaIngestionRun.status == STATUS_PUBLICADO]
+    if codigo_municipio_tce:
+        filtros.append(
+            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce
+        )
+    if chave_empenho:
+        filtros.append(TceAnulacaoEmpenho.chave_empenho == chave_empenho)
+    return (
+        select(
+            TceDespesaIngestionRun.codigo_municipio_tce.label("codigo_municipio_tce"),
+            TceAnulacaoEmpenho.chave_empenho.label("chave_empenho"),
+            func.sum(TceAnulacaoEmpenho.valor_anulacao_centavos).label(
+                "valor_anulado_centavos"
+            ),
+            func.count(TceAnulacaoEmpenho.id).label("quantidade_anulacoes"),
+        )
+        .join(TceDespesaIngestionRun, TceAnulacaoEmpenho.run_id == TceDespesaIngestionRun.id)
+        .where(*filtros)
+        .group_by(
+            TceDespesaIngestionRun.codigo_municipio_tce,
+            TceAnulacaoEmpenho.chave_empenho,
+        )
+        .subquery()
+    )
+
+
+def _serializar_registro_empenho(registro: Any) -> dict[str, Any]:
+    resultado = dict(registro)
+    resultado.pop("_total_items", None)
+    for campo in ("data_empenho", "publicado_em", "fornecedor_observado_em"):
+        valor = resultado.get(campo)
+        if valor is not None:
+            resultado[campo] = valor.isoformat()
+    for campo in (
+        "valor_empenhado_centavos",
+        "valor_anulado_centavos",
+        "valor_liquido_centavos",
+        "quantidade_anulacoes",
+        "run_id",
+        "exercicio_orcamento",
+    ):
+        if resultado.get(campo) is not None:
+            resultado[campo] = int(resultado[campo])
+    return resultado
+
+
+def listar_empenhos_publicados_paginados(
+    *,
+    data_inicial: date,
+    data_final: date,
+    codigo_municipio_tce: str | None,
+    portes: list[str],
+    origens: list[str],
+    elementos: list[str],
+    busca: str | None,
+    pagina: int,
+    tamanho_pagina: int,
+    ordenar_por: str,
+    ordem: str,
+) -> dict[str, Any]:
+    """Lista somente empenhos monitorados pertencentes aos lotes publicados."""
+    database.init_db()
+    anulacoes = _subconsulta_anulacoes_publicadas(
+        codigo_municipio_tce=codigo_municipio_tce
+    )
+    expressoes = _expressoes_empenhos_publicados()
+    valor_anulado = func.coalesce(anulacoes.c.valor_anulado_centavos, 0)
+    quantidade_anulacoes = func.coalesce(anulacoes.c.quantidade_anulacoes, 0)
+    valor_liquido = TceEmpenho.valor_empenhado_centavos - valor_anulado
+
+    filtros = [
+        TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+        TceEmpenho.natureza_considerada.is_(True),
+        TceEmpenho.data_empenho >= data_inicial,
+        TceEmpenho.data_empenho <= data_final,
+        TceEmpenho.codigo_elemento_despesa.in_(elementos),
+    ]
+    if codigo_municipio_tce:
+        filtros.append(TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce)
+    if portes:
+        filtros.append(expressoes["porte"].in_(portes))
+    if origens:
+        filtros.append(expressoes["origem"].in_(origens))
+    if busca and busca.strip():
+        termo = f"%{busca.strip()}%"
+        filtros.append(
+            or_(
+                TceEmpenho.numero_empenho.ilike(termo),
+                TceEmpenho.chave_empenho.ilike(termo),
+                TceEmpenho.nome_fornecedor.ilike(termo),
+                TceEmpenho.documento_fornecedor.ilike(termo),
+            )
+        )
+
+    joins = (
+        (TceDespesaIngestionRun, TceEmpenho.run_id == TceDespesaIngestionRun.id),
+        (TceMunicipio, TceMunicipio.codigo_municipio_tce == TceDespesaIngestionRun.codigo_municipio_tce),
+        (IbgeMunicipio, IbgeMunicipio.codigo_municipio == TceMunicipio.codigo_municipio_ibge),
+    )
+    consulta = select(
+        TceEmpenho.chave_empenho,
+        TceEmpenho.exercicio_orcamento,
+        TceEmpenho.data_empenho,
+        TceEmpenho.numero_empenho,
+        TceEmpenho.codigo_natureza_despesa,
+        TceEmpenho.codigo_elemento_despesa,
+        TceEmpenho.valor_empenhado_centavos,
+        TceEmpenho.documento_fornecedor,
+        TceEmpenho.cnpj_fornecedor,
+        TceEmpenho.nome_fornecedor,
+        TceDespesaIngestionRun.codigo_municipio_tce,
+        TceMunicipio.codigo_municipio_ibge,
+        IbgeMunicipio.nome.label("municipio_comprador"),
+        IbgeMunicipio.uf.label("uf_comprador"),
+        expressoes["porte"].label("porte_fornecedor"),
+        expressoes["origem"].label("origem_fornecedor"),
+        valor_anulado.label("valor_anulado_centavos"),
+        valor_liquido.label("valor_liquido_centavos"),
+        quantidade_anulacoes.label("quantidade_anulacoes"),
+        func.count().over().label("_total_items"),
+    )
+    for tabela, condicao in joins:
+        consulta = consulta.join(tabela, condicao)
+    consulta = (
+        consulta.outerjoin(FornecedorCache, FornecedorCache.cnpj == TceEmpenho.cnpj_fornecedor)
+        .outerjoin(
+            anulacoes,
+            (anulacoes.c.codigo_municipio_tce == TceDespesaIngestionRun.codigo_municipio_tce)
+            & (anulacoes.c.chave_empenho == TceEmpenho.chave_empenho),
+        )
+        .where(*filtros)
+    )
+    ordenacoes = {
+        "date": TceEmpenho.data_empenho,
+        "municipality": IbgeMunicipio.nome,
+        "supplier": TceEmpenho.nome_fornecedor,
+        "expense_element": TceEmpenho.codigo_elemento_despesa,
+        "gross_value": TceEmpenho.valor_empenhado_centavos,
+        "cancelled_value": valor_anulado,
+        "net_value": valor_liquido,
+    }
+    coluna_ordem = ordenacoes[ordenar_por]
+    direcao = coluna_ordem.asc() if ordem == "asc" else coluna_ordem.desc()
+    consulta = consulta.order_by(direcao, TceEmpenho.chave_empenho.asc()).limit(
+        tamanho_pagina
+    ).offset((pagina - 1) * tamanho_pagina)
+
+    contagem = select(func.count(TceEmpenho.id))
+    for tabela, condicao in joins:
+        contagem = contagem.join(tabela, condicao)
+    contagem = contagem.outerjoin(
+        FornecedorCache, FornecedorCache.cnpj == TceEmpenho.cnpj_fornecedor
+    ).where(*filtros)
+    with orm.main_session() as session:
+        registros = session.execute(consulta).mappings().all()
+        if registros:
+            total = int(registros[0]["_total_items"])
+        elif pagina == 1:
+            total = 0
+        else:
+            total = int(session.scalar(contagem) or 0)
+    return {
+        "total": total,
+        "registros": [_serializar_registro_empenho(item) for item in registros],
+    }
+
+
+def obter_empenho_publicado_por_chave(chave_empenho: str) -> dict[str, Any] | None:
+    database.init_db()
+    anulacoes = _subconsulta_anulacoes_publicadas(chave_empenho=chave_empenho)
+    expressoes = _expressoes_empenhos_publicados()
+    valor_anulado = func.coalesce(anulacoes.c.valor_anulado_centavos, 0)
+    quantidade_anulacoes = func.coalesce(anulacoes.c.quantidade_anulacoes, 0)
+    consulta = (
+        select(
+            TceEmpenho,
+            TceDespesaIngestionRun.codigo_municipio_tce,
+            TceDespesaIngestionRun.competencia,
+            TceDespesaIngestionRun.status.label("status_publicacao"),
+            TceDespesaIngestionRun.publicado_em,
+            TceMunicipio.codigo_municipio_ibge,
+            IbgeMunicipio.nome.label("municipio_comprador"),
+            IbgeMunicipio.uf.label("uf_comprador"),
+            expressoes["porte"].label("porte_fornecedor"),
+            expressoes["origem"].label("origem_fornecedor"),
+            expressoes["municipio_fornecedor"].label("municipio_fornecedor"),
+            expressoes["uf_fornecedor"].label("uf_fornecedor"),
+            FornecedorCache.dados_normalizados["cnae_principal_codigo"].astext.label("cnae_principal_codigo"),
+            FornecedorCache.dados_normalizados["cnae_principal_descricao"].astext.label("cnae_principal_descricao"),
+            FornecedorCache.observado_em.label("fornecedor_observado_em"),
+            valor_anulado.label("valor_anulado_centavos"),
+            (TceEmpenho.valor_empenhado_centavos - valor_anulado).label("valor_liquido_centavos"),
+            quantidade_anulacoes.label("quantidade_anulacoes"),
+        )
+        .join(TceDespesaIngestionRun, TceEmpenho.run_id == TceDespesaIngestionRun.id)
+        .join(TceMunicipio, TceMunicipio.codigo_municipio_tce == TceDespesaIngestionRun.codigo_municipio_tce)
+        .join(IbgeMunicipio, IbgeMunicipio.codigo_municipio == TceMunicipio.codigo_municipio_ibge)
+        .outerjoin(FornecedorCache, FornecedorCache.cnpj == TceEmpenho.cnpj_fornecedor)
+        .outerjoin(
+            anulacoes,
+            (anulacoes.c.codigo_municipio_tce == TceDespesaIngestionRun.codigo_municipio_tce)
+            & (anulacoes.c.chave_empenho == TceEmpenho.chave_empenho),
+        )
+        .where(
+            TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+            TceEmpenho.natureza_considerada.is_(True),
+            TceEmpenho.chave_empenho == chave_empenho,
+        )
+        .order_by(TceDespesaIngestionRun.publicado_em.desc())
+    )
+    with orm.main_session() as session:
+        registro = session.execute(consulta).mappings().first()
+    if registro is None:
+        return None
+    resultado = dict(registro)
+    empenho = resultado.pop("TceEmpenho")
+    for coluna in TceEmpenho.__table__.columns:
+        if coluna.name != "payload":
+            resultado.setdefault(coluna.name, getattr(empenho, coluna.name))
+    return _serializar_registro_empenho(resultado)
+
+
+def listar_anulacoes_publicadas_por_empenho(
+    *,
+    chave_empenho: str,
+    codigo_municipio_tce: str,
+) -> list[dict[str, Any]]:
+    database.init_db()
+    consulta = (
+        select(
+            TceAnulacaoEmpenho.chave_anulacao,
+            TceAnulacaoEmpenho.numero_anulacao,
+            TceAnulacaoEmpenho.data_anulacao,
+            TceAnulacaoEmpenho.modalidade_anulacao,
+            TceAnulacaoEmpenho.descricao_anulacao,
+            TceAnulacaoEmpenho.valor_anulacao_centavos,
+        )
+        .join(TceDespesaIngestionRun, TceAnulacaoEmpenho.run_id == TceDespesaIngestionRun.id)
+        .where(
+            TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce,
+            TceAnulacaoEmpenho.chave_empenho == chave_empenho,
+        )
+        .order_by(TceAnulacaoEmpenho.data_anulacao, TceAnulacaoEmpenho.chave_anulacao)
+    )
+    with orm.main_session() as session:
+        registros = session.execute(consulta).mappings().all()
+    return [
+        {
+            **dict(item),
+            "data_anulacao": item["data_anulacao"].isoformat(),
+            "valor_anulacao_centavos": int(item["valor_anulacao_centavos"]),
+        }
+        for item in registros
+    ]
+
+
 def registrar_lote_rejeitado(
     *,
     codigo_municipio_tce: str,
@@ -547,8 +858,11 @@ def publicar_lote_tce(
 __all__ = [
     "LoteTceValidado",
     "ResultadoPublicacaoTce",
+    "listar_anulacoes_publicadas_por_empenho",
     "listar_empenhos_liquidos_publicados",
+    "listar_empenhos_publicados_paginados",
     "listar_publicacoes_competencias",
+    "obter_empenho_publicado_por_chave",
     "publicar_lote_tce",
     "registrar_lote_rejeitado",
     "remover_lotes_expirados",

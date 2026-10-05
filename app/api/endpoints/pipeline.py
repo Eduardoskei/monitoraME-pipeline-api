@@ -3,9 +3,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from app.api.errors import REQUEST_ID_HEADER, obter_request_id, resposta_erro
-from app.api.schemas.comparisons import TceComparisonRequest
-from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO
-from app.pipeline import analisys, comparisons
+from app.api.schemas.comparisons import CompanySize, SupplierOrigin, TceComparisonRequest
+from app.api.schemas.empenhos import EmpenhoSortField, SortOrder
+from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
+from app.pipeline import analisys, comparisons, empenhos
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -234,6 +235,113 @@ def tce_comparisons(
             message="Falha inesperada ao consultar os dados da comparacao.",
             details=[],
             request_id=request_id,
+        )
+
+
+def _erro_empenhos(
+    error: Exception,
+    *,
+    request_id: str,
+    mensagem_interna: str,
+) -> JSONResponse:
+    if isinstance(error, empenhos.EmpenhoRequestError):
+        logger.info(
+            "Consulta de empenhos rejeitada",
+            extra={"request_id": request_id, "error_code": error.code, "error": error.message},
+        )
+        return resposta_erro(
+            status_code=error.status_code,
+            code=error.code,
+            message=error.message,
+            details=error.details,
+            request_id=request_id,
+        )
+    logger.exception(
+        "Falha inesperada ao consultar empenhos",
+        extra={"request_id": request_id, "error_type": type(error).__name__},
+    )
+    return resposta_erro(
+        status_code=500,
+        code="INTERNAL_ERROR",
+        message=mensagem_interna,
+        details=[],
+        request_id=request_id,
+    )
+
+
+@router.get(
+    "/tce/empenhos",
+    summary="Lista empenhos publicados armazenados",
+    description=(
+        "Lista e pagina empenhos dos sete elementos monitorados usando somente "
+        "lotes publicados e fornecedores armazenados no banco local."
+    ),
+    response_model=None,
+)
+def tce_empenhos(
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_ibge_code: Annotated[str | None, Query(pattern=r"^\d{7}$")] = None,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+    search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    sort_by: EmpenhoSortField = EmpenhoSortField.NET_VALUE,
+    sort_order: SortOrder = SortOrder.DESC,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return empenhos.listar_empenhos(
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_ibge_code=municipality_ibge_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+            search=search,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by.value,
+            sort_order=sort_order.value,
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao listar os empenhos.",
+        )
+
+
+@router.get(
+    "/tce/empenhos/{chave_empenho}",
+    summary="Detalha um empenho publicado pela chave canonica",
+    description=(
+        "Retorna dados do empenho, valor bruto, anulacoes e valor liquido sem "
+        "consultar fontes externas."
+    ),
+    response_model=None,
+)
+def tce_empenho_detalhe(
+    chave_empenho: str,
+    request: Request,
+    response: Response,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return empenhos.obter_empenho(chave_empenho)
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao consultar o empenho.",
         )
 
 

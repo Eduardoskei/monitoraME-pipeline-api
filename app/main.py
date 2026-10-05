@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from app.api.errors import COMPARISONS_PATH, resposta_erro_validacao_comparison
+from app.api.errors import resposta_erro_validacao, usa_erro_padronizado
 from app.core import database, log_database
 from app.core.logging import (
     configurar_logging,
@@ -19,6 +19,8 @@ from app.api.endpoints.pipeline import (
     tce_analitico_indicadores,
     tce_comparisons,
     tce_contratos,
+    tce_empenho_detalhe,
+    tce_empenhos,
     tce_kpi_portes_por_mes,
     tce_overview,
 )
@@ -37,6 +39,8 @@ __all__ = [
     "tce_analitico_indicadores",
     "tce_comparisons",
     "tce_contratos",
+    "tce_empenho_detalhe",
+    "tce_empenhos",
     "tce_kpi_portes_por_mes",
     "tce_overview",
 ]
@@ -81,8 +85,8 @@ async def validation_exception_handler(
     request: Request,
     error: RequestValidationError,
 ) -> JSONResponse:
-    if request.url.path == COMPARISONS_PATH:
-        return resposta_erro_validacao_comparison(request, error)
+    if usa_erro_padronizado(request.url.path):
+        return resposta_erro_validacao(request, error)
     return await request_validation_exception_handler(request, error)
 
 
