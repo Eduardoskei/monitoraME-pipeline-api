@@ -89,6 +89,8 @@ class MainTest(unittest.TestCase):
         self.assertIn("/pipeline/tce/kpis/portes-por-mes", rotas)
         self.assertIn("/pipeline/tce/overview", rotas)
         self.assertIn("/pipeline/tce/comparisons", rotas)
+        self.assertIn("/pipeline/tce/empenhos", rotas)
+        self.assertIn("/pipeline/tce/empenhos/{chave_empenho}", rotas)
         self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
 
     @patch("app.main.database.close_pool")
