@@ -7,8 +7,11 @@ from app.utils import normalizar_cnpj
 
 _COLUNAS_FORNECEDOR_EXPORTADAS = (
     "cnpj",
+    "cnpj_raiz",
     "razao_social",
     "porte_padronizado",
+    "porte_procedencia",
+    "mei_discriminado",
     "municipio_sede",
     "uf_sede",
     "cnae_principal_codigo",
@@ -17,6 +20,18 @@ _COLUNAS_FORNECEDOR_EXPORTADAS = (
     "elegivel_me",
     "cnpj_valido",
     "opencnpj_status",
+    "optante_simples_nacional",
+    "data_opcao_simples_nacional",
+    "data_exclusao_simples_nacional",
+    "optante_mei",
+    "data_opcao_mei",
+)
+
+_COLUNAS_PORTE_POR_RAIZ = (
+    "porte_padronizado",
+    "porte_procedencia",
+    "mei_discriminado",
+    "elegivel_me",
     "optante_simples_nacional",
     "data_opcao_simples_nacional",
     "data_exclusao_simples_nacional",
@@ -66,6 +81,40 @@ def enriquecer_com_fornecedor(
 
     df[chave_temp] = df[coluna_cnpj].map(normalizar_cnpj)
     resultado = df.merge(referencia, on=chave_temp, how="left")
+
+    # O porte e atributo da empresa (raiz de 8 digitos), enquanto municipio,
+    # UF e CNAE continuam pertencendo ao estabelecimento completo de 14.
+    if "cnpj_raiz" in fornecedores_df.columns:
+        colunas_raiz = [
+            coluna
+            for coluna in ("cnpj_raiz", *_COLUNAS_PORTE_POR_RAIZ)
+            if coluna in fornecedores_df.columns
+        ]
+        referencia_raiz = fornecedores_df[colunas_raiz].copy()
+        referencia_raiz = referencia_raiz.dropna(subset=["cnpj_raiz"])
+        referencia_raiz = referencia_raiz.drop_duplicates(subset=["cnpj_raiz"])
+        referencia_raiz = referencia_raiz.rename(
+            columns={
+                "cnpj_raiz": "_cnpj_raiz_merge",
+                **{coluna: f"_raiz_{coluna}" for coluna in colunas_raiz if coluna != "cnpj_raiz"},
+            }
+        )
+        resultado["_cnpj_raiz_merge"] = resultado[chave_temp].str.slice(0, 8)
+        resultado = resultado.merge(referencia_raiz, on="_cnpj_raiz_merge", how="left")
+        for coluna in _COLUNAS_PORTE_POR_RAIZ:
+            coluna_raiz = f"_raiz_{coluna}"
+            coluna_destino = f"fornecedor_{coluna}"
+            if coluna_raiz not in resultado.columns:
+                continue
+            if coluna_destino in resultado.columns:
+                resultado[coluna_destino] = resultado[coluna_raiz].combine_first(
+                    resultado[coluna_destino]
+                )
+            else:
+                resultado[coluna_destino] = resultado[coluna_raiz]
+            resultado = resultado.drop(columns=[coluna_raiz])
+        resultado = resultado.drop(columns=["_cnpj_raiz_merge"])
+
     return resultado.drop(columns=[chave_temp])
 
 

@@ -28,8 +28,11 @@ COLUNAS_BASE_ANALITICA_TCE = (
     "natureza_despesa",
     "valor",
     "cnpj_fornecedor",
+    "cnpj_raiz_fornecedor",
     "nome_fornecedor",
     "porte_fornecedor",
+    "porte_procedencia",
+    "mei_discriminado",
     "fornecedor_e_me",
     "fornecedor_e_mpe",
     "municipio_sede_fornecedor",
@@ -197,15 +200,22 @@ def montar_base_analitica_tce(
         ("numero_documento_negociante", "cnpj_fornecedor", "ni_fornecedor"),
     )
     resultado["cnpj_fornecedor"] = documento_fornecedor.map(_normalizar_cnpj_fornecedor)
+    resultado["cnpj_raiz_fornecedor"] = resultado["cnpj_fornecedor"].str.slice(0, 8)
     resultado["nome_fornecedor"] = _primeira_coluna(
         base,
         ("nome_negociante", "nome_fornecedor", "nome_razao_social_fornecedor"),
     )
 
-    porte = _primeira_coluna(base, ("fornecedor_porte_padronizado", "porte_fornecedor"))
+    # O Analytics TCE usa exclusivamente o enriquecimento Receita/Simples.
+    # Um eventual porte trazido pelo PNCP ou pela entrada nao participa desta apuracao.
+    porte = _serie_ou_padrao(base, "fornecedor_porte_padronizado")
     resultado["porte_fornecedor"] = porte.where(porte.map(valor_preenchido), PORTE_NAO_IDENTIFICADO)
+    resultado["porte_procedencia"] = _serie_ou_padrao(base, "fornecedor_porte_procedencia")
+    resultado["mei_discriminado"] = (
+        _serie_ou_padrao(base, "fornecedor_mei_discriminado", False).fillna(False).astype(bool)
+    )
     resultado["fornecedor_e_me"] = resultado["porte_fornecedor"].eq("ME")
-    resultado["fornecedor_e_mpe"] = resultado["porte_fornecedor"].isin(("ME", "EPP"))
+    resultado["fornecedor_e_mpe"] = resultado["porte_fornecedor"].isin(("MEI", "ME", "EPP"))
 
     resultado["municipio_sede_fornecedor"] = _primeira_coluna(
         base,

@@ -176,8 +176,12 @@ class PncpPersistenceTest(unittest.TestCase):
                 [
                     {
                         "cnpj": "12.345.678/0001-99",
+                        "cnpj_raiz": "12345678",
                         "razao_social": "EMPRESA TESTE LTDA",
                         "porte": "ME",
+                        "porte_padronizado": "ME",
+                        "porte_procedencia": "RETRATO_ATUAL",
+                        "mei_discriminado": False,
                         "elegivel_me": True,
                     }
                 ]
@@ -215,6 +219,9 @@ class PncpPersistenceTest(unittest.TestCase):
         fornecedor_params = _compiled_params(session.statements[-1])
         self.assertEqual(item_params["valor_total"], Decimal("10.50"))
         self.assertTrue(fornecedor_params["elegivel_me"])
+        self.assertEqual(fornecedor_params["cnpj_raiz"], "12345678")
+        self.assertEqual(fornecedor_params["porte_procedencia"], "RETRATO_ATUAL")
+        self.assertFalse(fornecedor_params["mei_discriminado"])
 
     def test_persistir_tabelas_ignora_registros_sem_chave_obrigatoria(self) -> None:
         session = FakeSession(retornos=[])

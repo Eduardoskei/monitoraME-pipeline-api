@@ -608,7 +608,7 @@ class LimparFornecedoresTest(unittest.TestCase):
         self.assertTrue(por_cnpj.loc["98765432000111", "optante_simples_nacional"])
         self.assertTrue(pd.isna(por_cnpj.loc["98765432000111", "optante_mei"]))
 
-    def test_sem_porte_mantem_elegibilidade_nula_para_kpi(self) -> None:
+    def test_sem_porte_produz_nao_identificado(self) -> None:
         df = opencnpj_cleaning.limpar_fornecedores(
             [
                 {
@@ -620,8 +620,53 @@ class LimparFornecedoresTest(unittest.TestCase):
 
         self.assertIn("porte_padronizado", df.columns)
         self.assertIn("elegivel_me", df.columns)
-        self.assertTrue(pd.isna(df.iloc[0]["porte_padronizado"]))
-        self.assertTrue(pd.isna(df.iloc[0]["elegivel_me"]))
+        self.assertEqual(df.iloc[0]["porte_padronizado"], "NAO_IDENTIFICADO")
+        self.assertFalse(df.iloc[0]["elegivel_me"])
+
+    def test_classifica_receita_e_simples_sem_inferir_mei_do_porte_01(self) -> None:
+        df = opencnpj_cleaning.limpar_fornecedores(
+            [
+                {
+                    "cnpj": "11444777000161",
+                    "opencnpj": {
+                        "porte_empresa": "01",
+                        "simples_mei": {"opcao_mei": "N"},
+                    },
+                },
+                {
+                    "cnpj": "11444777000242",
+                    "opencnpj": {
+                        "porte_empresa": "01",
+                        "simples_mei": {"opcao_mei": "S"},
+                    },
+                },
+                {"cnpj": "98765432000111", "opencnpj": {"porte_empresa": "03"}},
+                {"cnpj": "55555555000155", "opencnpj": {"porte_empresa": "05"}},
+                {"cnpj": "22222222000122", "opencnpj": {"porte_empresa": "00"}},
+            ]
+        ).set_index("cnpj")
+
+        self.assertEqual(df.loc["11444777000161", "porte_padronizado"], "ME")
+        self.assertFalse(df.loc["11444777000161", "mei_discriminado"])
+        self.assertEqual(df.loc["11444777000242", "porte_padronizado"], "MEI")
+        self.assertTrue(df.loc["11444777000242", "mei_discriminado"])
+        self.assertEqual(df.loc["98765432000111", "porte_padronizado"], "EPP")
+        self.assertEqual(df.loc["55555555000155", "porte_padronizado"], "DEMAIS")
+        self.assertEqual(df.loc["22222222000122", "porte_padronizado"], "NAO_IDENTIFICADO")
+
+    def test_porte_usa_raiz_e_armazena_procedencia(self) -> None:
+        df = opencnpj_cleaning.limpar_fornecedores(
+            [
+                {
+                    "cnpj": "11444777000242",
+                    "porte": "03",
+                    "porte_procedencia": "historico",
+                }
+            ]
+        )
+
+        self.assertEqual(df.iloc[0]["cnpj_raiz"], "11444777")
+        self.assertEqual(df.iloc[0]["porte_procedencia"], "HISTORICO")
 
 
 class PadronizarNomesColunasTest(unittest.TestCase):

@@ -138,6 +138,43 @@ class JuntarItensPncpTest(unittest.TestCase):
 
 
 class EnriquecerComFornecedorTest(unittest.TestCase):
+    def test_porte_vem_da_raiz_e_localizacao_do_estabelecimento(self) -> None:
+        fornecedores_df = pd.DataFrame(
+            [
+                {
+                    "cnpj": "11444777000161",
+                    "cnpj_raiz": "11444777",
+                    "porte_padronizado": "ME",
+                    "porte_procedencia": "HISTORICO",
+                    "mei_discriminado": False,
+                    "municipio_sede": "FORTALEZA",
+                    "uf_sede": "CE",
+                },
+                {
+                    "cnpj": "11444777000242",
+                    "cnpj_raiz": "11444777",
+                    "porte_padronizado": "NAO_IDENTIFICADO",
+                    "porte_procedencia": "RETRATO_ATUAL",
+                    "mei_discriminado": False,
+                    "municipio_sede": "AMONTADA",
+                    "uf_sede": "CE",
+                },
+            ]
+        )
+        contratos = pd.DataFrame(
+            [{"contrato_id": 1, "ni_fornecedor": "11.444.777/0002-42"}]
+        )
+
+        resultado = merge.enriquecer_com_fornecedor(
+            contratos,
+            fornecedores_df,
+            coluna_cnpj="ni_fornecedor",
+        ).iloc[0]
+
+        self.assertEqual(resultado["fornecedor_porte_padronizado"], "ME")
+        self.assertEqual(resultado["fornecedor_porte_procedencia"], "HISTORICO")
+        self.assertEqual(resultado["fornecedor_municipio_sede"], "AMONTADA")
+
     def test_traz_dados_do_fornecedor_e_marca_nao_localizado(self) -> None:
         fornecedores_df = _fornecedores_df_valido()
         df = pd.DataFrame(

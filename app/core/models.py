@@ -319,9 +319,12 @@ class PncpFornecedor(MainBase):
     __tablename__ = "pncp_fornecedores"
 
     cnpj: Mapped[str] = mapped_column(Text, primary_key=True)
+    cnpj_raiz: Mapped[str | None] = mapped_column(Text)
     razao_social: Mapped[str | None] = mapped_column(Text)
     porte: Mapped[str | None] = mapped_column(Text)
     porte_padronizado: Mapped[str | None] = mapped_column(Text)
+    porte_procedencia: Mapped[str | None] = mapped_column(Text)
+    mei_discriminado: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     municipio_sede: Mapped[str | None] = mapped_column(Text)
     uf_sede: Mapped[str | None] = mapped_column(Text)
     cnae_principal_codigo: Mapped[str | None] = mapped_column(Text)
@@ -346,6 +349,7 @@ class PncpFornecedor(MainBase):
 
 
 Index("idx_ibge_municipios_uf_nome", IbgeMunicipio.uf, IbgeMunicipio.nome)
+Index("idx_pncp_fornecedores_cnpj_raiz", PncpFornecedor.cnpj_raiz)
 Index("idx_pncp_ingestion_runs_escopo_execucao", PncpIngestionRun.escopo, PncpIngestionRun.executado_em.desc())
 Index(
     "idx_pncp_contratacoes_datas",

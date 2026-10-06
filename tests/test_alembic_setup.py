@@ -64,6 +64,16 @@ class AlembicSetupTest(unittest.TestCase):
         self.assertTrue(callable(modulo.upgrade))
         self.assertTrue(callable(modulo.downgrade))
 
+    def test_migration_adiciona_classificacao_receita_simples(self) -> None:
+        migration = ROOT / "alembic" / "main" / "versions" / "0002_fornecedor_porte_receita_simples.py"
+        modulo = _carregar_migration(migration)
+        texto = migration.read_text(encoding="utf-8")
+
+        self.assertEqual(modulo.down_revision, "0001_initial_main")
+        self.assertIn("cnpj_raiz", texto)
+        self.assertIn("porte_procedencia", texto)
+        self.assertIn("mei_discriminado", texto)
+
 
 if __name__ == "__main__":
     unittest.main()

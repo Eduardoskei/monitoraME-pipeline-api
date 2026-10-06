@@ -562,9 +562,12 @@ def _persistir_fornecedores(session: Session, df: pd.DataFrame | None) -> tuple[
 
         valores = {
             "cnpj": cnpj,
+            "cnpj_raiz": _texto(registro, "cnpj_raiz"),
             "razao_social": _texto(registro, "razao_social"),
             "porte": _texto(registro, "porte"),
             "porte_padronizado": _texto(registro, "porte_padronizado"),
+            "porte_procedencia": _texto(registro, "porte_procedencia"),
+            "mei_discriminado": _booleano(registro, "mei_discriminado") or False,
             "municipio_sede": _texto(registro, "municipio_sede"),
             "uf_sede": _texto(registro, "uf_sede"),
             "cnae_principal_codigo": _texto(registro, "cnae_principal_codigo"),
@@ -583,8 +586,11 @@ def _persistir_fornecedores(session: Session, df: pd.DataFrame | None) -> tuple[
             "cnpj",
             (
                 "razao_social",
+                "cnpj_raiz",
                 "porte",
                 "porte_padronizado",
+                "porte_procedencia",
+                "mei_discriminado",
                 "municipio_sede",
                 "uf_sede",
                 "cnae_principal_codigo",

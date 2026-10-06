@@ -19,12 +19,24 @@ _MAPA_PORTE_EMPRESARIAL = {
     "EMPRESA DE PEQUENO PORTE": "EPP",
     "DEMAIS": "DEMAIS",
     "OUTROS": "DEMAIS",
-    "NAO INFORMADO": "DEMAIS",
-    "1": "MEI",
-    "2": "ME",
+    "NAO IDENTIFICADO": "NAO_IDENTIFICADO",
+    "NAO_IDENTIFICADO": "NAO_IDENTIFICADO",
+    "NAO_INFORMADO": "NAO_IDENTIFICADO",
+    "NAO INFORMADO": "NAO_IDENTIFICADO",
+    "0": "NAO_IDENTIFICADO",
+    "00": "NAO_IDENTIFICADO",
+    "1": "ME",
+    "01": "ME",
     "3": "EPP",
+    "03": "EPP",
     "5": "DEMAIS",
+    "05": "DEMAIS",
 }
+
+PORTE_NAO_IDENTIFICADO = "NAO_IDENTIFICADO"
+PROCEDENCIA_HISTORICO = "HISTORICO"
+PROCEDENCIA_RETRATO_ATUAL = "RETRATO_ATUAL"
+_PROCEDENCIAS_PORTE = {PROCEDENCIA_HISTORICO, PROCEDENCIA_RETRATO_ATUAL}
 
 _MARCADORES_AUSENTES = ("", "nao_informado", "NAO INFORMADO")
 
@@ -71,6 +83,40 @@ def normalizar_porte_empresarial(valor: Any) -> str | None:
     if chave == "":
         return None
     return _MAPA_PORTE_EMPRESARIAL.get(chave)
+
+
+def classificar_porte_receita_simples(porte_receita: Any, mei_confirmado: Any) -> str:
+    """Classifica o porte usando a Receita e a confirmacao de MEI do Simples.
+
+    O codigo 01 da Receita significa microempresa e nunca basta, sozinho,
+    para identificar um MEI. Somente uma confirmacao positiva no arquivo do
+    Simples Nacional promove a classificacao para MEI.
+    """
+    mei = normalizar_booleano(mei_confirmado)
+    if mei is True:
+        return "MEI"
+
+    porte = normalizar_porte_empresarial(porte_receita)
+    if porte in {"ME", "EPP", "DEMAIS"}:
+        return porte
+    return PORTE_NAO_IDENTIFICADO
+
+
+def normalizar_procedencia_porte(valor: Any) -> str | None:
+    if valor is None:
+        return None
+    try:
+        if pd.isna(valor):
+            return None
+    except (TypeError, ValueError):
+        pass
+    chave = remover_acentos(str(valor)).strip().upper().replace(" ", "_")
+    return chave if chave in _PROCEDENCIAS_PORTE else None
+
+
+def extrair_raiz_cnpj(valor: Any) -> str | None:
+    cnpj = somente_digitos(valor)
+    return cnpj[:8] if len(cnpj) == 14 else None
 
 
 def normalizar_booleano(valor: Any) -> Any:
@@ -162,6 +208,8 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
             "porte",
             "porte_empresa",
             "opencnpj_porte_empresa",
+            "porte_empresa_codigo",
+            "opencnpj_porte_empresa_codigo",
         )
         if c in df.columns
     ]
@@ -169,12 +217,8 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
         porte = df[colunas_porte[0]]
         for coluna in colunas_porte[1:]:
             porte = porte.combine_first(df[coluna])
-        df["porte_padronizado"] = porte.map(normalizar_porte_empresarial)
-        elegivel = df["porte_padronizado"].eq("ME").astype("boolean")
-        df["elegivel_me"] = elegivel.mask(df["porte_padronizado"].isna(), pd.NA)
     else:
-        df["porte_padronizado"] = pd.Series([pd.NA] * len(df), dtype="string")
-        df["elegivel_me"] = pd.Series([pd.NA] * len(df), dtype="boolean")
+        porte = pd.Series([pd.NA] * len(df), index=df.index, dtype="string")
 
     coluna_simples = next(
         (
@@ -239,6 +283,8 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     )
     if coluna_mei:
         df["optante_mei"] = df[coluna_mei].map(normalizar_booleano).astype("boolean")
+    else:
+        df["optante_mei"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="boolean")
 
     coluna_data_opcao_mei = next(
         (
@@ -256,6 +302,33 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
     if coluna_data_opcao_mei:
         df["data_opcao_mei"] = df[coluna_data_opcao_mei]
 
+    df["cnpj_raiz"] = df["cnpj"].map(extrair_raiz_cnpj).astype("string")
+    df["mei_discriminado"] = df["optante_mei"].fillna(False).astype(bool)
+    df["porte_padronizado"] = pd.Series(
+        (
+            classificar_porte_receita_simples(porte_receita, mei_confirmado)
+            for porte_receita, mei_confirmado in zip(porte, df["optante_mei"])
+        ),
+        index=df.index,
+        dtype="string",
+    )
+    df["elegivel_me"] = df["porte_padronizado"].eq("ME").astype("boolean")
+
+    colunas_procedencia = tuple(
+        c
+        for c in (
+            "porte_procedencia",
+            "procedencia_porte",
+            "opencnpj_porte_procedencia",
+        )
+        if c in df.columns
+    )
+    if colunas_procedencia:
+        procedencia = _campo_canonico(df, colunas_procedencia).map(normalizar_procedencia_porte)
+        df["porte_procedencia"] = procedencia.fillna(PROCEDENCIA_RETRATO_ATUAL).astype("string")
+    else:
+        df["porte_procedencia"] = PROCEDENCIA_RETRATO_ATUAL
+
     df["municipio_sede"] = _campo_canonico(df, _COLUNAS_MUNICIPIO_SEDE)
     df["uf_sede"] = _campo_canonico(df, _COLUNAS_UF_SEDE).map(normalizar_uf)
     df["cnae_principal_codigo"] = _campo_canonico(df, _COLUNAS_CNAE_PRINCIPAL_CODIGO).map(normalizar_codigo_cnae)
@@ -266,10 +339,16 @@ def limpar_fornecedores(registros: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 __all__ = [
+    "PORTE_NAO_IDENTIFICADO",
+    "PROCEDENCIA_HISTORICO",
+    "PROCEDENCIA_RETRATO_ATUAL",
+    "classificar_porte_receita_simples",
+    "extrair_raiz_cnpj",
     "limpar_fornecedores",
     "normalizar_booleano",
     "normalizar_codigo_cnae",
     "normalizar_lista_cnaes",
     "normalizar_porte_empresarial",
+    "normalizar_procedencia_porte",
     "normalizar_uf",
 ]

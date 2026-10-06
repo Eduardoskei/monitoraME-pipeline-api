@@ -63,6 +63,14 @@ class OrmMetadataTest(unittest.TestCase):
         self.assertEqual(fk.column.table.name, "pncp_contratacoes")
         self.assertEqual(fk.ondelete, "CASCADE")
 
+    def test_fornecedor_armazena_classificacao_receita_simples(self) -> None:
+        tabela = models.PncpFornecedor.__table__
+
+        self.assertIn("cnpj_raiz", tabela.c)
+        self.assertIn("porte_procedencia", tabela.c)
+        self.assertIn("mei_discriminado", tabela.c)
+        self.assertFalse(tabela.c.mei_discriminado.nullable)
+
     def test_log_metadata_registra_apenas_tabela_de_logs(self) -> None:
         self.assertEqual(set(orm.LogBase.metadata.tables), {"logs_ingestao"})
 

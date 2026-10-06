@@ -22,7 +22,7 @@ os.environ.setdefault("MODALIDADE_ID_PADRAO", "6")
 
 import pandas as pd
 
-from app.pipeline import analisys, kpis
+from app.pipeline import analitico, analisys, kpis
 
 
 class SerializacaoJsonTest(unittest.TestCase):
@@ -187,6 +187,22 @@ class ConsultarTceContratosTest(unittest.TestCase):
 
 
 class MontarBaseAnaliticaTceTest(unittest.TestCase):
+    def test_nao_usa_porte_pncp_no_analytics_tce(self) -> None:
+        entrada = pd.DataFrame(
+            [
+                {
+                    "numero_contrato": "1",
+                    "numero_documento_negociante": "11.444.777/0001-61",
+                    "porte_fornecedor": "EPP",
+                }
+            ]
+        )
+
+        base = analitico.montar_base_analitica_tce(entrada)
+
+        self.assertEqual(base.iloc[0]["porte_fornecedor"], "NAO_IDENTIFICADO")
+        self.assertFalse(base.iloc[0]["mei_discriminado"])
+
     @patch("app.pipeline.analisys.fornecedores.coletar_fornecedores_em_lote")
     @patch("app.pipeline.analisys.tce.buscar_contratados")
     @patch("app.pipeline.analisys.tce.buscar_contratos")
@@ -280,7 +296,10 @@ class MontarBaseAnaliticaTceTest(unittest.TestCase):
         self.assertEqual(primeiro["natureza_despesa"], "Material de consumo")
         self.assertEqual(primeiro["valor"], 10000.0)
         self.assertEqual(primeiro["cnpj_fornecedor"], "11444777000161")
+        self.assertEqual(primeiro["cnpj_raiz_fornecedor"], "11444777")
         self.assertEqual(primeiro["porte_fornecedor"], "ME")
+        self.assertEqual(primeiro["porte_procedencia"], "RETRATO_ATUAL")
+        self.assertFalse(primeiro["mei_discriminado"])
         self.assertTrue(primeiro["fornecedor_e_me"])
         self.assertTrue(primeiro["fornecedor_e_mpe"])
         self.assertEqual(primeiro["municipio_sede_fornecedor"], "AMONTADA")
