@@ -7,7 +7,7 @@ from app.api.schemas.comparisons import CompanySize, SupplierOrigin, TceComparis
 from app.api.schemas.empenhos import EmpenhoSortField, SortOrder
 from app.api.schemas.fornecedores import SupplierDocumentType, SupplierSortField
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
-from app.pipeline import analisys, comparisons, empenhos, fornecedores
+from app.pipeline import analisys, comparisons, empenhos, fornecedores, territorial
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -157,9 +157,9 @@ def tce_kpi_portes_por_mes(
     "/tce/overview",
     summary="Consulta o overview de ME e MEI",
     description=(
-        "Atualiza as competências solicitadas, calcula a participação de ME + MEI "
-        "nas compras de porte identificado e restringe o detalhamento geográfico "
-        "a ME e MEI."
+        "Sem município, consolida os lotes publicados de todo o Ceará usando somente "
+        "o banco local. Com município, atualiza as competências solicitadas. Calcula "
+        "a participação de ME + MEI e restringe o detalhamento geográfico a ME e MEI."
     ),
     response_description="KPIs, evolução mensal e destino dos recursos de ME e MEI.",
 )
@@ -167,9 +167,14 @@ def tce_overview(
     data_inicial: Annotated[str, _data_inicial_query()],
     data_final: Annotated[str, _data_final_query()],
     codigo_municipio: Annotated[
-        str,
-        Query(description="Código do município no TCE-CE."),
-    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
+        str | None,
+        Query(
+            description=(
+                "Código do município no TCE-CE. Quando omitido, consolida "
+                "todos os municípios do Ceará com lotes publicados."
+            )
+        ),
+    ] = None,
 ) -> dict[str, object]:
     try:
         _validar_periodo_api(data_inicial, data_final)
@@ -178,6 +183,47 @@ def tce_overview(
             data_final=data_final,
             codigo_municipio=codigo_municipio,
         )
+    except Exception as error:
+        raise _erro_pipeline(error) from error
+
+
+@router.get(
+    "/tce/overview/municipal",
+    summary="Consulta o overview anual de um municipio",
+    description=(
+        "Busca o overview municipal de ME e MEI para um exercicio completo, "
+        "usando as mesmas regras e indicadores do overview."
+    ),
+    response_description="Overview anual do municipio informado.",
+)
+def tce_overview_municipal(
+    exercicio: Annotated[
+        int,
+        Query(description="Exercicio consultado no formato AAAA.", ge=2000, le=9999),
+    ],
+    codigo_municipio_tce: Annotated[
+        str,
+        Query(description="Codigo do municipio no TCE-CE.", pattern=r"^\d{3}$"),
+    ],
+) -> dict[str, object]:
+    data_inicial = f"{exercicio:04d}-01-01"
+    data_final = f"{exercicio:04d}-12-31"
+    try:
+        resultado = analisys.consultar_overview_tce(
+            data_inicial=data_inicial,
+            data_final=data_final,
+            codigo_municipio=codigo_municipio_tce,
+        )
+        return {
+            **resultado,
+            "parametros": {
+                **dict(resultado.get("parametros") or {}),
+                "exercicio": exercicio,
+                "data_inicial": data_inicial,
+                "data_final": data_final,
+                "codigo_municipio": codigo_municipio_tce,
+            },
+        }
     except Exception as error:
         raise _erro_pipeline(error) from error
 
@@ -491,6 +537,48 @@ def tce_fornecedor_empenhos(
             error,
             request_id=request_id,
             mensagem_interna="Falha inesperada ao listar os empenhos do fornecedor.",
+        )
+
+
+@router.get(
+    "/tce/analise-territorial",
+    summary="Analisa a distribuicao territorial das compras municipais",
+    description=(
+        "Calcula retencao local, destino dos recursos, portes, elementos, evolucao, "
+        "concentracao e ranking usando apenas empenhos publicados e cadastros locais."
+    ),
+    response_model=None,
+)
+def tce_analise_territorial(
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_tce_code: Annotated[str, Query(pattern=r"^\d{3}$")] = CODIGO_MUNICIPIO_TCE_PADRAO,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+    ranking_limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return territorial.consultar_analise_territorial(
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_tce_code=municipality_tce_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+            ranking_limit=ranking_limit,
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao calcular a analise territorial.",
         )
 
 

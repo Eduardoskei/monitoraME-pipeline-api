@@ -30,6 +30,8 @@ COLUNAS_BASE_ANALITICA_TCE = (
     "valor_empenhado",
     "valor_anulado",
     "valor",
+    "tipo_documento_fornecedor",
+    "documento_fornecedor",
     "cnpj_fornecedor",
     "nome_fornecedor",
     "porte_fornecedor",
@@ -228,6 +230,12 @@ def montar_base_analitica_tce(
     documento_fornecedor = _primeira_coluna(
         base,
         ("cnpj_fornecedor", "documento_fornecedor"),
+    )
+    resultado["tipo_documento_fornecedor"] = _serie_ou_padrao(
+        base, "tipo_documento_fornecedor"
+    )
+    resultado["documento_fornecedor"] = _serie_ou_padrao(
+        base, "documento_fornecedor"
     )
     resultado["cnpj_fornecedor"] = documento_fornecedor.map(_normalizar_cnpj_fornecedor)
     resultado["nome_fornecedor"] = _primeira_coluna(
