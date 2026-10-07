@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 import os
 from pathlib import Path
@@ -349,6 +349,58 @@ class IndicadoresEmpenhosTest(unittest.TestCase):
 
 
 class ResolverMunicipioTceTest(unittest.TestCase):
+    @patch("app.pipeline.analisys.fornecedores.obter_fornecedores_com_cache")
+    @patch("app.pipeline.analisys.tce_despesas_persistence.listar_empenhos_liquidos_publicados")
+    @patch("app.pipeline.analisys.tce_despesas_persistence.listar_publicacoes_competencias_estado")
+    def test_overview_sem_municipio_consolida_ceara_somente_com_banco_local(
+        self,
+        listar_publicacoes,
+        listar_empenhos,
+        obter_fornecedores,
+    ) -> None:
+        listar_publicacoes.return_value = [
+            {
+                "codigo_municipio_tce": "004",
+                "codigo_municipio_ibge": "2300200",
+                "municipio": "Acarau",
+                "uf": "CE",
+                "competencia": "2025-01",
+                "publicado_em": None,
+            },
+            {
+                "codigo_municipio_tce": "162",
+                "codigo_municipio_ibge": "2312908",
+                "municipio": "Sobral",
+                "uf": "CE",
+                "competencia": "2025-01",
+                "publicado_em": None,
+            },
+        ]
+        listar_empenhos.return_value = []
+
+        resultado = analisys.consultar_overview_tce(
+            data_inicial="2025-01-01",
+            data_final="2025-01-31",
+            codigo_municipio=None,
+        )
+
+        self.assertEqual(resultado["parametros"]["codigo_municipio"], None)
+        self.assertEqual(resultado["escopo_territorial"]["tipo"], "ESTADO")
+        self.assertEqual(
+            resultado["escopo_territorial"]["quantidade_municipios_com_publicacao"],
+            2,
+        )
+        self.assertEqual(resultado["origem_dados"], "BANCO_LOCAL")
+        self.assertFalse(resultado["consultas_externas"])
+        self.assertEqual(resultado["kpis"]["total_compras_ME_centavos"], 0)
+        listar_empenhos.assert_called_once_with(
+            codigo_municipio_tce=None,
+            data_inicial=date(2025, 1, 1),
+            data_final=date(2025, 1, 31),
+            uf="CE",
+        )
+        obter_fornecedores.assert_not_called()
+
     @patch("app.pipeline.analisys.tce.buscar_municipios")
     @patch("app.pipeline.analisys.database.salvar_municipios_tce")
     @patch(

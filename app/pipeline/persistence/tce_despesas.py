@@ -343,17 +343,24 @@ def listar_publicacoes_competencias(
 
 def listar_empenhos_liquidos_publicados(
     *,
-    codigo_municipio_tce: str,
+    codigo_municipio_tce: str | None,
     data_inicial: date,
     data_final: date,
+    uf: str | None = None,
 ) -> list[dict[str, Any]]:
     """Lê empenhos ativos e desconta todas as anulações atualmente publicadas."""
     if data_inicial > data_final:
         raise ValueError("data_inicial deve ser menor ou igual a data_final.")
 
     database.init_db()
+    filtros_anulacoes = [TceDespesaIngestionRun.status == STATUS_PUBLICADO]
+    if codigo_municipio_tce is not None:
+        filtros_anulacoes.append(
+            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce
+        )
     anulacoes_publicadas = (
         select(
+            TceDespesaIngestionRun.codigo_municipio_tce.label("codigo_municipio_tce"),
             TceAnulacaoEmpenho.chave_empenho.label("chave_empenho"),
             func.sum(TceAnulacaoEmpenho.valor_anulacao_centavos).label(
                 "valor_anulado_centavos"
@@ -363,16 +370,20 @@ def listar_empenhos_liquidos_publicados(
             TceDespesaIngestionRun,
             TceAnulacaoEmpenho.run_id == TceDespesaIngestionRun.id,
         )
-        .where(
-            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce,
-            TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+        .where(*filtros_anulacoes)
+        .group_by(
+            TceDespesaIngestionRun.codigo_municipio_tce,
+            TceAnulacaoEmpenho.chave_empenho,
         )
-        .group_by(TceAnulacaoEmpenho.chave_empenho)
         .subquery()
     )
     valor_anulado = func.coalesce(anulacoes_publicadas.c.valor_anulado_centavos, 0)
     consulta = (
         select(
+            TceDespesaIngestionRun.codigo_municipio_tce,
+            TceMunicipio.codigo_municipio_ibge,
+            IbgeMunicipio.nome.label("municipio_comprador"),
+            IbgeMunicipio.uf.label("uf_comprador"),
             TceEmpenho.chave_empenho,
             TceEmpenho.exercicio_orcamento,
             TceEmpenho.codigo_orgao,
@@ -399,12 +410,24 @@ def listar_empenhos_liquidos_publicados(
             TceDespesaIngestionRun,
             TceEmpenho.run_id == TceDespesaIngestionRun.id,
         )
+        .join(
+            TceMunicipio,
+            TceMunicipio.codigo_municipio_tce
+            == TceDespesaIngestionRun.codigo_municipio_tce,
+        )
+        .join(
+            IbgeMunicipio,
+            IbgeMunicipio.codigo_municipio == TceMunicipio.codigo_municipio_ibge,
+        )
         .outerjoin(
             anulacoes_publicadas,
-            anulacoes_publicadas.c.chave_empenho == TceEmpenho.chave_empenho,
+            (
+                anulacoes_publicadas.c.codigo_municipio_tce
+                == TceDespesaIngestionRun.codigo_municipio_tce
+            )
+            & (anulacoes_publicadas.c.chave_empenho == TceEmpenho.chave_empenho),
         )
         .where(
-            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce,
             TceDespesaIngestionRun.status == STATUS_PUBLICADO,
             TceEmpenho.natureza_considerada.is_(True),
             TceEmpenho.data_empenho >= data_inicial,
@@ -412,6 +435,12 @@ def listar_empenhos_liquidos_publicados(
         )
         .order_by(TceEmpenho.data_empenho, TceEmpenho.chave_empenho)
     )
+    if codigo_municipio_tce is not None:
+        consulta = consulta.where(
+            TceDespesaIngestionRun.codigo_municipio_tce == codigo_municipio_tce
+        )
+    if uf is not None:
+        consulta = consulta.where(IbgeMunicipio.uf == uf.upper())
 
     with orm.main_session() as session:
         registros = session.execute(consulta).mappings().all()
@@ -419,13 +448,65 @@ def listar_empenhos_liquidos_publicados(
     return [
         {
             **dict(registro),
-            "codigo_municipio_tce": codigo_municipio_tce,
+            "codigo_municipio_tce": registro.get("codigo_municipio_tce")
+            or codigo_municipio_tce,
             "data_empenho": registro["data_empenho"].isoformat(),
             "valor_empenhado_centavos": int(registro["valor_empenhado_centavos"]),
             "valor_anulado_centavos": int(registro["valor_anulado_centavos"]),
             "valor_liquido_centavos": int(registro["valor_liquido_centavos"]),
         }
         for registro in registros
+    ]
+
+
+def listar_publicacoes_competencias_estado(
+    *,
+    competencias: Iterable[str],
+    uf: str,
+) -> list[dict[str, Any]]:
+    """Lista as particoes municipais publicadas no periodo para uma UF."""
+    competencias_unicas = tuple(dict.fromkeys(str(item) for item in competencias))
+    if not competencias_unicas:
+        return []
+    database.init_db()
+    consulta = (
+        select(
+            TceDespesaIngestionRun.codigo_municipio_tce,
+            TceMunicipio.codigo_municipio_ibge,
+            IbgeMunicipio.nome.label("municipio"),
+            IbgeMunicipio.uf,
+            TceDespesaIngestionRun.competencia,
+            TceDespesaIngestionRun.publicado_em,
+        )
+        .join(
+            TceMunicipio,
+            TceMunicipio.codigo_municipio_tce
+            == TceDespesaIngestionRun.codigo_municipio_tce,
+        )
+        .join(
+            IbgeMunicipio,
+            IbgeMunicipio.codigo_municipio == TceMunicipio.codigo_municipio_ibge,
+        )
+        .where(
+            TceDespesaIngestionRun.status == STATUS_PUBLICADO,
+            TceDespesaIngestionRun.competencia.in_(competencias_unicas),
+            IbgeMunicipio.uf == uf.upper(),
+        )
+        .order_by(
+            TceDespesaIngestionRun.competencia,
+            TceDespesaIngestionRun.codigo_municipio_tce,
+        )
+    )
+    with orm.main_session() as session:
+        registros = session.execute(consulta).mappings().all()
+    return [
+        {
+            **dict(item),
+            "publicado_em": item["publicado_em"].isoformat()
+            if item.get("publicado_em") is not None
+            else None,
+        }
+        for item in registros
     ]
 
 
@@ -870,6 +951,7 @@ __all__ = [
     "listar_empenhos_liquidos_publicados",
     "listar_empenhos_publicados_paginados",
     "listar_publicacoes_competencias",
+    "listar_publicacoes_competencias_estado",
     "obter_empenho_publicado_por_chave",
     "publicar_lote_tce",
     "registrar_lote_rejeitado",

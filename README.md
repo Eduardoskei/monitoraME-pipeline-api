@@ -128,10 +128,12 @@ publicação continuam aparecendo em `competencias_ausentes`.
 
 ### Overview de ME e MEI
 
-`GET /pipeline/tce/overview` recebe `data_inicial`, `data_final` e
-`codigo_municipio`. A rota atualiza as competências e o cadastro dos
-fornecedores antes do cálculo, mas restringe sua resposta a empenhos líquidos
-de ME e MEI. Essa restrição não altera os demais indicadores da API.
+`GET /pipeline/tce/overview` recebe `data_inicial`, `data_final` e aceita
+`codigo_municipio` opcional. Sem o código, consolida todo o Ceará usando apenas
+os lotes e cadastros já publicados no banco local. Com o código, mantém o fluxo
+municipal, atualizando as competências e o cadastro dos fornecedores antes do
+cálculo. A resposta restringe o detalhamento geográfico a empenhos líquidos de
+ME e MEI. Essa restrição não altera os demais indicadores da API.
 
 O total de compras consideradas corresponde aos portes identificados `ME +
 MEI + EPP + DEMAIS`. A participação é `(ME + MEI) / compras consideradas`;

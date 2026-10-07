@@ -157,9 +157,9 @@ def tce_kpi_portes_por_mes(
     "/tce/overview",
     summary="Consulta o overview de ME e MEI",
     description=(
-        "Atualiza as competências solicitadas, calcula a participação de ME + MEI "
-        "nas compras de porte identificado e restringe o detalhamento geográfico "
-        "a ME e MEI."
+        "Sem município, consolida os lotes publicados de todo o Ceará usando somente "
+        "o banco local. Com município, atualiza as competências solicitadas. Calcula "
+        "a participação de ME + MEI e restringe o detalhamento geográfico a ME e MEI."
     ),
     response_description="KPIs, evolução mensal e destino dos recursos de ME e MEI.",
 )
@@ -167,9 +167,14 @@ def tce_overview(
     data_inicial: Annotated[str, _data_inicial_query()],
     data_final: Annotated[str, _data_final_query()],
     codigo_municipio: Annotated[
-        str,
-        Query(description="Código do município no TCE-CE."),
-    ] = CODIGO_MUNICIPIO_TCE_PADRAO,
+        str | None,
+        Query(
+            description=(
+                "Código do município no TCE-CE. Quando omitido, consolida "
+                "todos os municípios do Ceará com lotes publicados."
+            )
+        ),
+    ] = None,
 ) -> dict[str, object]:
     try:
         _validar_periodo_api(data_inicial, data_final)
