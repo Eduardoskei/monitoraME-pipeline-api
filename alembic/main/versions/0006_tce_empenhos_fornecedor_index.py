@@ -1,6 +1,6 @@
 """add supplier lookup index to published commitments
 
-Revision ID: 0006_tce_empenhos_fornecedor_index
+Revision ID: 0006_tce_empenhos_fornecedor_idx
 Revises: 0005_fornecedores_cache
 Create Date: 2026-10-05
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0006_tce_empenhos_fornecedor_index"
+revision = "0006_tce_empenhos_fornecedor_idx"
 down_revision = "0005_fornecedores_cache"
 branch_labels = None
 depends_on = None

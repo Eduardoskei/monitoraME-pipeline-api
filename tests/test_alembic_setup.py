@@ -176,7 +176,8 @@ class AlembicSetupTest(unittest.TestCase):
         modulo = _carregar_migration(migration)
         texto = migration.read_text(encoding="utf-8")
 
-        self.assertEqual(modulo.revision, "0006_tce_empenhos_fornecedor_index")
+        self.assertEqual(modulo.revision, "0006_tce_empenhos_fornecedor_idx")
+        self.assertLessEqual(len(modulo.revision), 32)
         self.assertEqual(modulo.down_revision, "0005_fornecedores_cache")
         self.assertIn('"idx_tce_empenhos_fornecedor_data"', texto)
         self.assertIn('"documento_fornecedor"', texto)
