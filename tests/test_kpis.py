@@ -408,6 +408,53 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
         )
 
 
+    def test_overview_por_portes_expoe_todos_por_padrao_e_filtra_calculos(self) -> None:
+        base = pd.DataFrame(
+            [
+                {
+                    "ano_mes": "2025-01",
+                    "valor": valor,
+                    "porte_fornecedor": porte,
+                    "origem_geografica": origem,
+                    "natureza_despesa_codigo": "30",
+                }
+                for porte, valor, origem in (
+                    ("MEI", 10.0, kpis.ORIGEM_FORNECEDOR_LOCAL),
+                    ("ME", 20.0, kpis.ORIGEM_FORNECEDOR_LOCAL),
+                    ("EPP", 30.0, kpis.ORIGEM_FORNECEDOR_OUTRO_MUNICIPIO_CE),
+                    ("DEMAIS", 40.0, "Fora do estado"),
+                    ("NAO_IDENTIFICADO", 50.0, "Nao identificada"),
+                )
+            ]
+        )
+
+        todos = kpis.calcular_overview_portes(
+            base,
+            portes_considerados=list(kpis.PORTES_EMPRESARIAIS),
+        )
+        me_mei = kpis.calcular_overview_portes(
+            base,
+            portes_considerados=["ME", "MEI"],
+        )
+
+        self.assertEqual(
+            [item["porte"] for item in todos["participacao_por_porte_empresarial"]],
+            ["MEI", "ME", "EPP", "DEMAIS", "NAO_IDENTIFICADO"],
+        )
+        self.assertEqual(todos["kpis"]["total_compras_centavos"], 15_000)
+        self.assertEqual(me_mei["kpis"]["total_compras_centavos"], 3_000)
+        self.assertEqual(
+            me_mei["kpis"]["percentual_compras_fornecedores_locais"],
+            100.0,
+        )
+        self.assertEqual(
+            me_mei["evolucao_compras_consideradas"][0][
+                "compras_consideradas_centavos"
+            ],
+            3_000,
+        )
+
+
 class CalcularParticipacaoMeLocalTest(unittest.TestCase):
     def setUp(self) -> None:
         self.licitacoes = pd.DataFrame([

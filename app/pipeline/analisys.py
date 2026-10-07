@@ -581,6 +581,59 @@ def consultar_overview_tce(
     }
 
 
+PORTES_FILTRO_OVERVIEW_MUNICIPAL = {
+    "ME": "ME",
+    "MEI": "MEI",
+    "EPP": "EPP",
+    "OTHER": "DEMAIS",
+    "UNKNOWN": "NAO_IDENTIFICADO",
+}
+
+
+def consultar_overview_municipal_tce(
+    data_inicial: str,
+    data_final: str,
+    *,
+    codigo_municipio: str,
+    company_sizes: list[str] | None = None,
+    throttle_fornecedores: float = 0.3,
+) -> dict[str, Any]:
+    """Calcula o overview municipal para todos os portes ou para o recorte pedido."""
+    filtros = list(dict.fromkeys(company_sizes or []))
+    invalidos = sorted(set(filtros) - set(PORTES_FILTRO_OVERVIEW_MUNICIPAL))
+    if invalidos:
+        raise ValueError(f"Portes empresariais invalidos: {', '.join(invalidos)}.")
+    portes = (
+        [PORTES_FILTRO_OVERVIEW_MUNICIPAL[item] for item in filtros]
+        if filtros
+        else list(kpis.PORTES_EMPRESARIAIS)
+    )
+    base, metadados = montar_base_analitica_tce(
+        data_inicial,
+        data_final,
+        codigo_municipio=codigo_municipio,
+        throttle_fornecedores=throttle_fornecedores,
+    )
+    overview = kpis.calcular_overview_portes(
+        base,
+        portes_considerados=portes,
+    )
+    return {
+        **metadados,
+        "kpi": "overview_municipal_por_portes",
+        "escopo": {
+            "portes_considerados": portes,
+            "filtro_company_sizes": filtros,
+            "regra_filtro": (
+                "FILTRO_EXPLICITO" if filtros else "TODOS_OS_PORTES"
+            ),
+            "regra_geografica": "TODOS_OS_PORTES_CONSIDERADOS",
+        },
+        "unidade_monetaria": "CENTAVOS",
+        **overview,
+    }
+
+
 def _consultar_overview_tce_estado(
     data_inicial: str,
     data_final: str,

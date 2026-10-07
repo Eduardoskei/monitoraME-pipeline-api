@@ -191,8 +191,8 @@ def tce_overview(
     "/tce/overview/municipal",
     summary="Consulta o overview de um municipio por periodo",
     description=(
-        "Busca o overview municipal de ME e MEI para o periodo informado, "
-        "usando as mesmas regras e indicadores do overview."
+        "Busca o overview municipal para o periodo informado. Por padrao, "
+        "considera todos os portes; company_sizes restringe todo o calculo."
     ),
     response_description="Overview do municipio e periodo informados.",
 )
@@ -203,13 +203,24 @@ def tce_overview_municipal(
         str,
         Query(description="Codigo do municipio no TCE-CE.", pattern=r"^\d{3}$"),
     ],
+    company_sizes: Annotated[
+        list[CompanySize] | None,
+        Query(
+            description=(
+                "Portes empresariais repetiveis. Quando omitido, inclui "
+                "MEI, ME, EPP, OTHER e UNKNOWN."
+            )
+        ),
+    ] = None,
 ) -> dict[str, object]:
     try:
         _validar_periodo_api(data_inicial, data_final)
-        resultado = analisys.consultar_overview_tce(
+        filtros_portes = [item.value for item in company_sizes or []]
+        resultado = analisys.consultar_overview_municipal_tce(
             data_inicial=data_inicial,
             data_final=data_final,
             codigo_municipio=codigo_municipio_tce,
+            company_sizes=filtros_portes,
         )
         return {
             **resultado,
@@ -218,6 +229,7 @@ def tce_overview_municipal(
                 "data_inicial": data_inicial,
                 "data_final": data_final,
                 "codigo_municipio": codigo_municipio_tce,
+                "company_sizes": filtros_portes,
             },
         }
     except Exception as error:
