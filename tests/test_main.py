@@ -88,6 +88,7 @@ class MainTest(unittest.TestCase):
         self.assertNotIn("/pipeline/tce/kpis/me-por-mes", rotas)
         self.assertIn("/pipeline/tce/kpis/portes-por-mes", rotas)
         self.assertIn("/pipeline/tce/overview", rotas)
+        self.assertIn("/pipeline/tce/overview/municipal", rotas)
         self.assertIn("/pipeline/tce/comparisons", rotas)
         self.assertIn("/pipeline/tce/empenhos", rotas)
         self.assertIn("/pipeline/tce/empenhos/{chave_empenho}", rotas)
@@ -235,6 +236,32 @@ class MainTest(unittest.TestCase):
             payload["kpis"]["total_compras_ME_centavos"],
             100_000,
         )
+
+    @patch("app.main.analisys.consultar_overview_tce")
+    def test_endpoint_tce_overview_municipal_converte_exercicio_em_periodo(
+        self,
+        consultar_overview,
+    ) -> None:
+        consultar_overview.return_value = {
+            "fonte": "TCE-CE",
+            "parametros": {"codigo_municipio": "010"},
+            "kpi": "overview_me_mei",
+            "kpis": {"total_compras_ME_centavos": 100_000},
+        }
+
+        payload = main.tce_overview_municipal(
+            exercicio=2025,
+            codigo_municipio_tce="010",
+        )
+
+        consultar_overview.assert_called_once_with(
+            data_inicial="2025-01-01",
+            data_final="2025-12-31",
+            codigo_municipio="010",
+        )
+        self.assertEqual(payload["parametros"]["exercicio"], 2025)
+        self.assertEqual(payload["parametros"]["data_inicial"], "2025-01-01")
+        self.assertEqual(payload["parametros"]["data_final"], "2025-12-31")
 
     @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
     def test_endpoint_analitico_mapeia_falha_total_de_competencias_para_503(

@@ -187,6 +187,47 @@ def tce_overview(
         raise _erro_pipeline(error) from error
 
 
+@router.get(
+    "/tce/overview/municipal",
+    summary="Consulta o overview anual de um municipio",
+    description=(
+        "Busca o overview municipal de ME e MEI para um exercicio completo, "
+        "usando as mesmas regras e indicadores do overview."
+    ),
+    response_description="Overview anual do municipio informado.",
+)
+def tce_overview_municipal(
+    exercicio: Annotated[
+        int,
+        Query(description="Exercicio consultado no formato AAAA.", ge=2000, le=9999),
+    ],
+    codigo_municipio_tce: Annotated[
+        str,
+        Query(description="Codigo do municipio no TCE-CE.", pattern=r"^\d{3}$"),
+    ],
+) -> dict[str, object]:
+    data_inicial = f"{exercicio:04d}-01-01"
+    data_final = f"{exercicio:04d}-12-31"
+    try:
+        resultado = analisys.consultar_overview_tce(
+            data_inicial=data_inicial,
+            data_final=data_final,
+            codigo_municipio=codigo_municipio_tce,
+        )
+        return {
+            **resultado,
+            "parametros": {
+                **dict(resultado.get("parametros") or {}),
+                "exercicio": exercicio,
+                "data_inicial": data_inicial,
+                "data_final": data_final,
+                "codigo_municipio": codigo_municipio_tce,
+            },
+        }
+    except Exception as error:
+        raise _erro_pipeline(error) from error
+
+
 @router.post(
     "/tce/comparisons",
     summary="Compara dois overviews armazenados do TCE-CE",

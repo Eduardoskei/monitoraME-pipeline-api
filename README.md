@@ -90,6 +90,7 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/contratos`: consulta e enriquece contratos do TCE-CE.
 - `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
 - `GET /pipeline/tce/overview`: calcula o overview exclusivo de ME e MEI.
+- `GET /pipeline/tce/overview/municipal`: calcula o overview anual de um município por exercício e código TCE.
 - `POST /pipeline/tce/comparisons`: compara dois overviews usando somente dados armazenados.
 - `GET /pipeline/tce/empenhos`: lista e pagina empenhos publicados armazenados.
 - `GET /pipeline/tce/empenhos/{chave_empenho}`: detalha um empenho e suas anulações.
