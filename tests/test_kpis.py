@@ -442,6 +442,8 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
             ["MEI", "ME", "EPP", "DEMAIS", "NAO_IDENTIFICADO"],
         )
         self.assertEqual(todos["kpis"]["total_compras_centavos"], 15_000)
+        self.assertEqual(todos["kpis"]["total_compras_ME_centavos"], 3_000)
+        self.assertEqual(todos["kpis"]["percentual_participacao_me"], 30.0)
         self.assertEqual(me_mei["kpis"]["total_compras_centavos"], 3_000)
         self.assertEqual(
             me_mei["kpis"]["percentual_compras_fornecedores_locais"],
@@ -452,6 +454,22 @@ class CalcularOverviewMeMeiTest(unittest.TestCase):
                 "compras_consideradas_centavos"
             ],
             3_000,
+        )
+        self.assertEqual(
+            todos["evolucao_compras_consideradas"],
+            [
+                {
+                    "periodo": "2025-01",
+                    "compras_consideradas_centavos": 10_000,
+                    "microempresas_centavos": 3_000,
+                }
+            ],
+        )
+        self.assertEqual(
+            todos["evolucao_compras_por_portes"][0][
+                "compras_consideradas_centavos"
+            ],
+            15_000,
         )
 
 
