@@ -238,7 +238,7 @@ class MainTest(unittest.TestCase):
         )
 
     @patch("app.main.analisys.consultar_overview_tce")
-    def test_endpoint_tce_overview_municipal_converte_exercicio_em_periodo(
+    def test_endpoint_tce_overview_municipal_repassa_periodo(
         self,
         consultar_overview,
     ) -> None:
@@ -250,18 +250,19 @@ class MainTest(unittest.TestCase):
         }
 
         payload = main.tce_overview_municipal(
-            exercicio=2025,
+            data_inicial="2025-02-01",
+            data_final="2025-11-30",
             codigo_municipio_tce="010",
         )
 
         consultar_overview.assert_called_once_with(
-            data_inicial="2025-01-01",
-            data_final="2025-12-31",
+            data_inicial="2025-02-01",
+            data_final="2025-11-30",
             codigo_municipio="010",
         )
-        self.assertEqual(payload["parametros"]["exercicio"], 2025)
-        self.assertEqual(payload["parametros"]["data_inicial"], "2025-01-01")
-        self.assertEqual(payload["parametros"]["data_final"], "2025-12-31")
+        self.assertNotIn("exercicio", payload["parametros"])
+        self.assertEqual(payload["parametros"]["data_inicial"], "2025-02-01")
+        self.assertEqual(payload["parametros"]["data_final"], "2025-11-30")
 
     @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
     def test_endpoint_analitico_mapeia_falha_total_de_competencias_para_503(

@@ -189,26 +189,23 @@ def tce_overview(
 
 @router.get(
     "/tce/overview/municipal",
-    summary="Consulta o overview anual de um municipio",
+    summary="Consulta o overview de um municipio por periodo",
     description=(
-        "Busca o overview municipal de ME e MEI para um exercicio completo, "
+        "Busca o overview municipal de ME e MEI para o periodo informado, "
         "usando as mesmas regras e indicadores do overview."
     ),
-    response_description="Overview anual do municipio informado.",
+    response_description="Overview do municipio e periodo informados.",
 )
 def tce_overview_municipal(
-    exercicio: Annotated[
-        int,
-        Query(description="Exercicio consultado no formato AAAA.", ge=2000, le=9999),
-    ],
+    data_inicial: Annotated[str, _data_inicial_query()],
+    data_final: Annotated[str, _data_final_query()],
     codigo_municipio_tce: Annotated[
         str,
         Query(description="Codigo do municipio no TCE-CE.", pattern=r"^\d{3}$"),
     ],
 ) -> dict[str, object]:
-    data_inicial = f"{exercicio:04d}-01-01"
-    data_final = f"{exercicio:04d}-12-31"
     try:
+        _validar_periodo_api(data_inicial, data_final)
         resultado = analisys.consultar_overview_tce(
             data_inicial=data_inicial,
             data_final=data_final,
@@ -218,7 +215,6 @@ def tce_overview_municipal(
             **resultado,
             "parametros": {
                 **dict(resultado.get("parametros") or {}),
-                "exercicio": exercicio,
                 "data_inicial": data_inicial,
                 "data_final": data_final,
                 "codigo_municipio": codigo_municipio_tce,
