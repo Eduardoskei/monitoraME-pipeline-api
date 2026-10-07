@@ -792,6 +792,7 @@ def calcular_overview_portes(
     base = base_analitica.loc[
         base_analitica["porte_fornecedor"].isin(portes_considerados)
     ].copy()
+    overview_me_mei = calcular_overview_me_mei(base)
     base["_valor_centavos"] = base["valor"].map(_valor_reais_para_centavos)
     total = _somar_centavos(base["_valor_centavos"])
 
@@ -862,6 +863,12 @@ def calcular_overview_portes(
     return {
         "kpis": {
             "total_compras_centavos": total,
+            "percentual_participacao_me": overview_me_mei["kpis"][
+                "percentual_participacao_me"
+            ],
+            "total_compras_ME_centavos": overview_me_mei["kpis"][
+                "total_compras_ME_centavos"
+            ],
             "percentual_compras_fornecedores_locais": _percentual_0_a_100(local, total),
             "percentual_recursos_fora_municipio": _percentual_0_a_100(
                 fora_municipio, total
@@ -869,7 +876,10 @@ def calcular_overview_portes(
         },
         "participacao_por_porte_empresarial": participacao,
         "elementos_despesa": elementos,
-        "evolucao_compras_consideradas": evolucao,
+        "evolucao_compras_consideradas": overview_me_mei[
+            "evolucao_compras_consideradas"
+        ],
+        "evolucao_compras_por_portes": evolucao,
         "destino_recursos": [
             {
                 "destino": destino,
