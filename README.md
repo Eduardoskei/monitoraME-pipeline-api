@@ -97,8 +97,27 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}`: retorna cadastro, indicadores e gráficos do fornecedor.
 - `GET /pipeline/tce/fornecedores/{tipo_documento}/{documento}/empenhos`: pagina as notas consideradas do fornecedor.
 - `GET /pipeline/tce/analitico/indicadores`: atualiza as competências e calcula os indicadores analíticos principais sobre empenhos líquidos.
+- `GET /pipeline/tce/analise-territorial`: calcula retenção local, destino dos recursos, concentração e rankings usando somente dados publicados no banco local.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
+
+### Análise territorial
+
+`GET /pipeline/tce/analise-territorial` é somente leitura e não consulta fontes
+externas. A rota recebe `start_date`, `end_date`, `municipality_tce_code`, `uf`,
+listas opcionais de `company_sizes`, `supplier_origins` e
+`expense_element_codes`, além de `ranking_limit`. O retorno inclui valores
+empenhado, anulado e líquido, retenção local, evasão municipal, retenção no
+Ceará, cobertura cadastral e geográfica, destinos dos recursos, portes,
+elementos, evolução mensal, concentração HHI e ranking de fornecedores.
+
+```http
+GET /pipeline/tce/analise-territorial?start_date=2025-01-01&end_date=2025-12-31&municipality_tce_code=057&ranking_limit=10
+```
+
+Todos os valores monetários são inteiros em centavos e os percentuais usam a
+escala de `0` a `100`. Competências ausentes aparecem explicitamente na
+cobertura e não são convertidas em meses com valor zero.
 
 Competências publicadas são reutilizadas enquanto estiverem dentro da política
 de atualização: uma hora para o mês atual, 24 horas para os três meses

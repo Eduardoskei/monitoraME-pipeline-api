@@ -100,6 +100,7 @@ class MainTest(unittest.TestCase):
             rotas,
         )
         self.assertIn("/pipeline/tce/analitico/indicadores", rotas)
+        self.assertIn("/pipeline/tce/analise-territorial", rotas)
 
     @patch("app.main.database.close_pool")
     @patch("app.main.database.init_db")

@@ -7,7 +7,7 @@ from app.api.schemas.comparisons import CompanySize, SupplierOrigin, TceComparis
 from app.api.schemas.empenhos import EmpenhoSortField, SortOrder
 from app.api.schemas.fornecedores import SupplierDocumentType, SupplierSortField
 from app.core.config import CODIGO_MUNICIPIO_TCE_PADRAO, UF_PADRAO
-from app.pipeline import analisys, comparisons, empenhos, fornecedores
+from app.pipeline import analisys, comparisons, empenhos, fornecedores, territorial
 from app.pipeline.ingestion.fornecedores import FonteCadastralIndisponivelError
 from app.pipeline.ingestion import tce
 from app.pipeline.kpis import DadosInsuficientesKPI
@@ -491,6 +491,48 @@ def tce_fornecedor_empenhos(
             error,
             request_id=request_id,
             mensagem_interna="Falha inesperada ao listar os empenhos do fornecedor.",
+        )
+
+
+@router.get(
+    "/tce/analise-territorial",
+    summary="Analisa a distribuicao territorial das compras municipais",
+    description=(
+        "Calcula retencao local, destino dos recursos, portes, elementos, evolucao, "
+        "concentracao e ranking usando apenas empenhos publicados e cadastros locais."
+    ),
+    response_model=None,
+)
+def tce_analise_territorial(
+    request: Request,
+    response: Response,
+    start_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    end_date: Annotated[str, Query(pattern=DATA_ISO_PATTERN)],
+    uf: Annotated[str, Query(min_length=2, max_length=2)] = UF_PADRAO,
+    municipality_tce_code: Annotated[str, Query(pattern=r"^\d{3}$")] = CODIGO_MUNICIPIO_TCE_PADRAO,
+    company_sizes: Annotated[list[CompanySize] | None, Query()] = None,
+    supplier_origins: Annotated[list[SupplierOrigin] | None, Query()] = None,
+    expense_element_codes: Annotated[list[str] | None, Query()] = None,
+    ranking_limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> dict[str, Any] | JSONResponse:
+    request_id = obter_request_id(request)
+    response.headers[REQUEST_ID_HEADER] = request_id
+    try:
+        return territorial.consultar_analise_territorial(
+            start_date=start_date,
+            end_date=end_date,
+            uf=uf,
+            municipality_tce_code=municipality_tce_code,
+            company_sizes=[item.value for item in company_sizes or []],
+            supplier_origins=[item.value for item in supplier_origins or []],
+            expense_element_codes=expense_element_codes or [],
+            ranking_limit=ranking_limit,
+        )
+    except Exception as error:
+        return _erro_empenhos(
+            error,
+            request_id=request_id,
+            mensagem_interna="Falha inesperada ao calcular a analise territorial.",
         )
 
 

@@ -17,6 +17,7 @@ from app.core.logging import (
 from app.api.endpoints.health import health
 from app.api.endpoints.pipeline import (
     tce_analitico_indicadores,
+    tce_analise_territorial,
     tce_comparisons,
     tce_contratos,
     tce_empenho_detalhe,
@@ -40,6 +41,7 @@ __all__ = [
     "health",
     "lifespan",
     "tce_analitico_indicadores",
+    "tce_analise_territorial",
     "tce_comparisons",
     "tce_contratos",
     "tce_empenho_detalhe",
