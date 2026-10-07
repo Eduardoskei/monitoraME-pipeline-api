@@ -42,7 +42,7 @@ app/
 ## Requisitos
 
 - Python 3.14
-- PostgreSQL
+- Docker com Docker Compose
 - Acesso às APIs do TCE-CE, IBGE e OpenCNPJ
 - Dependências de `requirements.txt`
 
@@ -61,13 +61,41 @@ Variáveis usadas pela aplicação:
 | `DATABASE_URL` | Sim | Banco principal com caches e lotes analíticos. |
 | `LOG_DATABASE_URL` | Sim | Banco da tabela `logs_ingestao`. |
 | `LOG_LEVEL` | Não | Nível dos logs operacionais (`DEBUG`, `INFO`, `WARNING`, `ERROR`); padrão `INFO`. |
-| `DATABASE_SSLMODE` | Não | Modo SSL do banco principal; padrão `require`. |
-| `LOG_DATABASE_SSLMODE` | Não | Modo SSL do banco de logs. |
+| `DATABASE_SSLMODE` | Não | Modo SSL do banco principal; use `disable` no PostgreSQL local. |
+| `LOG_DATABASE_SSLMODE` | Não | Modo SSL do banco de logs; use `disable` localmente. |
 | `TCE_CE_BASE_URL` | Sim | API de dados abertos do TCE-CE. |
 | `IBGE_LOCALIDADES_BASE_URL` | Sim | API de localidades do IBGE. |
 | `OPENCNPJ_BASE_URL` | Sim | API cadastral OpenCNPJ. |
 | `UF_PADRAO` | Sim | UF compradora usada pela análise. |
 | `CODIGO_MUNICIPIO_TCE_PADRAO` | Sim | Código interno padrão do município no TCE-CE. |
+
+## Banco de dados local
+
+O `compose.yaml` inicia um database PostgreSQL em `localhost:5432`:
+
+- `monitorame`: tabelas principais, caches, lotes analíticos e logs.
+
+Os dois ambientes Alembic continuam isolados pelas tabelas de versão
+`alembic_version_main` e `alembic_version_logs`.
+
+As credenciais e a porta podem ser alteradas pelas variáveis `POSTGRES_*` do
+`.env`. Se forem alteradas, ajuste também `DATABASE_URL` e
+`LOG_DATABASE_URL`.
+
+Inicie a aplicação completa e confira seu estado:
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+O Compose constrói a imagem da API, espera o PostgreSQL ficar saudável, aplica
+as duas trilhas de migrations pelo serviço `migrate` e somente então inicia o
+serviço `api`. A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
+
+O PostgreSQL não usa volumes ou bind mounts. O diretório de dados é um
+`tmpfs`, portanto fica apenas em memória e é descartado ao reiniciar ou remover
+o container.
 
 ## Execução local
 
@@ -76,6 +104,7 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+docker compose up -d postgres
 alembic upgrade head
 alembic -n logs upgrade head
 uvicorn app.main:app --reload
@@ -84,6 +113,39 @@ uvicorn app.main:app --reload
 No Windows com Git Bash, ative o ambiente com `source .venv/Scripts/activate`.
 
 A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
+
+O Compose prepara uma instância nova; ele não transfere os dados existentes
+do Supabase. As migrations criam apenas a estrutura. Uma eventual migração de
+dados deve ser feita separadamente, depois de definir quais tabelas e
+históricos precisam ser preservados.
+
+## Imagem da aplicação
+
+Para construir apenas a imagem:
+
+```bash
+docker build -t monitorame-pipeline-api:local .
+```
+
+A imagem executa a API por padrão e aceita o comando `migrate` para aplicar os
+dois ambientes Alembic:
+
+```bash
+docker run --rm --env-file .env monitorame-pipeline-api:local migrate
+docker run --rm --env-file .env -p 8000:8000 monitorame-pipeline-api:local
+```
+
+Para publicar em um registry, defina um nome versionado, construa e envie:
+
+```bash
+docker build -t registry.example.com/monitorame/pipeline-api:1.0.0 .
+docker push registry.example.com/monitorame/pipeline-api:1.0.0
+```
+
+Em produção, configure `DATABASE_URL`, `LOG_DATABASE_URL` e os modos SSL para
+um PostgreSQL persistente externo. O serviço `postgres` deste Compose usa
+`tmpfs`, perde todos os dados ao reiniciar e é destinado apenas a ambientes
+efêmeros de desenvolvimento ou homologação.
 
 ## Rotas do pipeline
 

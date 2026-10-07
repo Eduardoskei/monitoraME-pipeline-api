@@ -1,0 +1,63 @@
+name: monitorame-pipeline
+
+x-app-service: &app-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ${APP_IMAGE:-monitorame-pipeline-api:local}
+  env_file:
+    - .env
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER:-monitorame}:${POSTGRES_PASSWORD:-monitorame}@postgres:5432/${POSTGRES_DB:-monitorame}
+    LOG_DATABASE_URL: postgresql://${POSTGRES_USER:-monitorame}:${POSTGRES_PASSWORD:-monitorame}@postgres:5432/${POSTGRES_DB:-monitorame}
+    DATABASE_SSLMODE: disable
+    LOG_DATABASE_SSLMODE: disable
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-monitorame}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-monitorame}
+      POSTGRES_DB: ${POSTGRES_DB:-monitorame}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  migrate:
+    <<: *app-service
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app-service
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
