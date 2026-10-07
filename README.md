@@ -90,7 +90,7 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/contratos`: consulta e enriquece contratos do TCE-CE.
 - `GET /pipeline/tce/kpis/portes-por-mes`: calcula a participação mensal por porte.
 - `GET /pipeline/tce/overview`: calcula o overview exclusivo de ME e MEI.
-- `GET /pipeline/tce/overview/municipal`: calcula o overview de um município por período e código TCE.
+- `GET /pipeline/tce/overview/municipal`: calcula o overview de um município por período, código TCE e portes opcionais.
 - `POST /pipeline/tce/comparisons`: compara dois overviews usando somente dados armazenados.
 - `GET /pipeline/tce/empenhos`: lista e pagina empenhos publicados armazenados.
 - `GET /pipeline/tce/empenhos/{chave_empenho}`: detalha um empenho e suas anulações.
@@ -101,6 +101,20 @@ A documentação OpenAPI fica em `http://127.0.0.1:8000/docs`.
 - `GET /pipeline/tce/analise-territorial`: calcula retenção local, destino dos recursos, concentração e rankings usando somente dados publicados no banco local.
 
 As rotas analíticas recebem datas no formato `YYYY-MM-DD`. Uma competência só entra no cálculo depois de ser coletada, validada e publicada. Falhas totais de atualização retornam `503`; meses que falharem durante uma consulta parcialmente bem-sucedida são sinalizados nos metadados.
+
+### Overview municipal por porte
+
+Por padrão, `GET /pipeline/tce/overview/municipal` considera e discrimina MEI,
+ME, EPP, demais portes e fornecedores sem porte identificado. O parâmetro
+repetível `company_sizes` restringe todo o cálculo; para reproduzir o recorte
+anterior de microempresas, envie `ME` e `MEI`:
+
+```http
+GET /pipeline/tce/overview/municipal?data_inicial=2025-01-01&data_final=2025-12-31&codigo_municipio_tce=010&company_sizes=ME&company_sizes=MEI
+```
+
+Os valores aceitos são `ME`, `MEI`, `EPP`, `OTHER` e `UNKNOWN`. No retorno,
+`OTHER` é apresentado como `DEMAIS` e `UNKNOWN` como `NAO_IDENTIFICADO`.
 
 ### Análise territorial
 

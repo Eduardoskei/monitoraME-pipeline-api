@@ -21,6 +21,7 @@ from fastapi import HTTPException
 import pandas as pd
 
 from app import main
+from app.api.schemas.comparisons import CompanySize
 from app.pipeline import analisys
 
 
@@ -237,7 +238,7 @@ class MainTest(unittest.TestCase):
             100_000,
         )
 
-    @patch("app.main.analisys.consultar_overview_tce")
+    @patch("app.main.analisys.consultar_overview_municipal_tce")
     def test_endpoint_tce_overview_municipal_repassa_periodo(
         self,
         consultar_overview,
@@ -253,16 +254,19 @@ class MainTest(unittest.TestCase):
             data_inicial="2025-02-01",
             data_final="2025-11-30",
             codigo_municipio_tce="010",
+            company_sizes=[CompanySize.ME, CompanySize.MEI],
         )
 
         consultar_overview.assert_called_once_with(
             data_inicial="2025-02-01",
             data_final="2025-11-30",
             codigo_municipio="010",
+            company_sizes=["ME", "MEI"],
         )
         self.assertNotIn("exercicio", payload["parametros"])
         self.assertEqual(payload["parametros"]["data_inicial"], "2025-02-01")
         self.assertEqual(payload["parametros"]["data_final"], "2025-11-30")
+        self.assertEqual(payload["parametros"]["company_sizes"], ["ME", "MEI"])
 
     @patch("app.main.analisys.consultar_tce_indicadores_analiticos")
     def test_endpoint_analitico_mapeia_falha_total_de_competencias_para_503(

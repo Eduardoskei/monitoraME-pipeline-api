@@ -770,3 +770,114 @@ def calcular_overview_me_mei(base_analitica: pd.DataFrame) -> dict[str, object]:
         "evolucao_compras_consideradas": evolucao,
         "destino_recursos": destino_recursos,
     }
+
+
+def calcular_overview_portes(
+    base_analitica: pd.DataFrame,
+    *,
+    portes_considerados: list[str],
+) -> dict[str, object]:
+    """Calcula um overview territorial para um conjunto explicito de portes."""
+    _validar_colunas(
+        base_analitica,
+        [
+            "ano_mes",
+            "valor",
+            "porte_fornecedor",
+            "origem_geografica",
+            "natureza_despesa_codigo",
+        ],
+        "overview por portes",
+    )
+    base = base_analitica.loc[
+        base_analitica["porte_fornecedor"].isin(portes_considerados)
+    ].copy()
+    base["_valor_centavos"] = base["valor"].map(_valor_reais_para_centavos)
+    total = _somar_centavos(base["_valor_centavos"])
+
+    participacao = []
+    for porte in PORTES_EMPRESARIAIS:
+        if porte not in portes_considerados:
+            continue
+        valor = _somar_centavos(
+            base.loc[base["porte_fornecedor"].eq(porte), "_valor_centavos"]
+        )
+        participacao.append({
+            "porte": porte,
+            "valor_centavos": valor,
+            "percentual": _percentual_0_a_100(valor, total),
+        })
+
+    origem = base["origem_geografica"].where(
+        base["origem_geografica"].isin(
+            {item for _, item in DESTINOS_RECURSOS_OVERVIEW}
+        ),
+        ORIGEM_FORNECEDOR_NAO_IDENTIFICADA,
+    )
+    base["_origem_overview"] = origem.fillna(ORIGEM_FORNECEDOR_NAO_IDENTIFICADA)
+    por_origem = {
+        origem_canonica: _somar_centavos(
+            base.loc[base["_origem_overview"].eq(origem_canonica), "_valor_centavos"]
+        )
+        for _, origem_canonica in DESTINOS_RECURSOS_OVERVIEW
+    }
+    local = por_origem[ORIGEM_FORNECEDOR_LOCAL]
+    fora_municipio = (
+        por_origem[ORIGEM_FORNECEDOR_OUTRO_MUNICIPIO_CE]
+        + por_origem[ORIGEM_FORNECEDOR_FORA_CE]
+    )
+
+    elementos = [
+        {
+            "codigo": codigo,
+            "nome": NATUREZAS_DESPESA_MONITORADAS[codigo],
+            "valor_liquido_centavos": _somar_centavos(
+                base.loc[
+                    base["natureza_despesa_codigo"].eq(codigo),
+                    "_valor_centavos",
+                ]
+            ),
+        }
+        for codigo in sorted(NATUREZAS_DESPESA_MONITORADAS)
+    ]
+    evolucao = []
+    for periodo in sorted(
+        str(item) for item in base["ano_mes"].dropna().unique() if str(item).strip()
+    ):
+        mensal = base.loc[base["ano_mes"].astype("string").eq(periodo)]
+        valor_mensal = _somar_centavos(mensal["_valor_centavos"])
+        valor_local = _somar_centavos(
+            mensal.loc[
+                mensal["_origem_overview"].eq(ORIGEM_FORNECEDOR_LOCAL),
+                "_valor_centavos",
+            ]
+        )
+        evolucao.append({
+            "periodo": periodo,
+            "compras_consideradas_centavos": valor_mensal,
+            "valor_local_centavos": valor_local,
+            "percentual_local": _percentual_0_a_100(valor_local, valor_mensal),
+        })
+
+    return {
+        "kpis": {
+            "total_compras_centavos": total,
+            "percentual_compras_fornecedores_locais": _percentual_0_a_100(local, total),
+            "percentual_recursos_fora_municipio": _percentual_0_a_100(
+                fora_municipio, total
+            ),
+        },
+        "participacao_por_porte_empresarial": participacao,
+        "elementos_despesa": elementos,
+        "evolucao_compras_consideradas": evolucao,
+        "destino_recursos": [
+            {
+                "destino": destino,
+                "valor_centavos": por_origem[origem_canonica],
+                "percentual": _percentual_0_a_100(
+                    por_origem[origem_canonica], total
+                ),
+            }
+            for destino, origem_canonica in DESTINOS_RECURSOS_OVERVIEW
+        ],
+    }
